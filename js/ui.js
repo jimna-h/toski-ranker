@@ -132,11 +132,19 @@ export class UI {
     return banner;
   }
 
-  deckCard(deckId, { eyebrow = "Place this deck", small = false, tierId = null } = {}) {
+  deckCard(deckId, { eyebrow = "Place this deck", small = false, tierId = null, onclick = null } = {}) {
     const d = this.deck(deckId);
+    const attrs = { class: `deck-card${small ? " vs" : ""}${onclick ? " tappable" : ""}` };
+    if (onclick) {
+      // A tappable card should be a real button to keyboards & assistive tech.
+      attrs.role = "button";
+      attrs.tabIndex = 0;
+      attrs.onclick = onclick;
+      attrs.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onclick(); } };
+    }
     return el(
       "div",
-      { class: `deck-card${small ? " vs" : ""}` },
+      attrs,
       this.artBanner(d, small),
       el("div", { class: "eyebrow" }, eyebrow),
       el("h2", { class: "deck-name" }, d.deckName),
@@ -231,18 +239,27 @@ export class UI {
     );
   }
 
-  /** Binary-insertion comparison question. */
+  /** Binary-insertion comparison, as a duel: the new deck on the left, the
+   *  already-placed pivot on the right — tap whichever is STRONGER.
+   *  (Left = new deck stronger; right = pivot stronger, i.e. new is weaker.)
+   *  The new deck keeps a fixed side so the eye never has to re-find it. */
   renderCompare(step) {
     this.clear();
     this.root.append(...this.topbar());
     this.root.append(
-      this.deckCard(step.deckId, { eyebrow: "Placing" }),
-      el("div", { class: "vs-label" }, "…is it stronger or weaker than…"),
-      this.deckCard(step.vsId, { eyebrow: "Compare against", small: true, tierId: step.tier }),
-      el("div", { class: "answer-row" },
-        el("button", { onclick: () => this.h.onAnswer("weaker") }, "Weaker"),
-        el("button", { class: "same", onclick: () => this.h.onAnswer("same") }, "About the same"),
-        el("button", { onclick: () => this.h.onAnswer("stronger") }, "Stronger")
+      el("div", { class: "vs-label" }, "Tap the stronger deck"),
+      el("div", { class: "duel" },
+        this.deckCard(step.deckId, {
+          eyebrow: "Placing", small: true,
+          onclick: () => this.h.onAnswer("stronger"),
+        }),
+        this.deckCard(step.vsId, {
+          eyebrow: "Already placed", small: true, tierId: step.tier,
+          onclick: () => this.h.onAnswer("weaker"),
+        })
+      ),
+      el("div", { class: "answer-row single" },
+        el("button", { class: "same", onclick: () => this.h.onAnswer("same") }, "About the same")
       ),
       this.dock()
     );
@@ -386,10 +403,41 @@ export class UI {
       ...["B1", "B2", "B3", "B4", "B5"].map((b) => el("span", {}, b))
     );
 
-    const dock = el("div", { class: "dock" }, canvas, axis, labels);
+    const dock = el("div", { class: "dock" },
+      el("div", { class: "dock-info-slot" }), canvas, axis, labels);
     // Layout needs real pixel widths, which only exist once in the DOM.
     requestAnimationFrame(() => this._layoutDock());
     return dock;
+  }
+
+  /** Tap a thumbnail → its details + a Re-rank action appear above the axis.
+   *  Deliberately two-step: thumbs are small on phones, and a single
+   *  mis-tap must never silently un-place a deck. Tapping the same thumb
+   *  again (or ✕) dismisses. */
+  _selectDockDeck(entry) {
+    const slot = this.root.querySelector(".dock-info-slot");
+    if (!slot) return;
+    if (this._dockSelected === entry.id) {
+      this._dockSelected = null;
+      slot.replaceChildren();
+    } else {
+      this._dockSelected = entry.id;
+      slot.replaceChildren(
+        el("div", { class: "dock-info" },
+          el("span", { class: "dock-info-name" },
+            entry.name, " ",
+            el("span", { class: "who" }, `· ${entry.owner} · ${entry.score.toFixed(2)}`)),
+          el("button", {
+            onclick: () => { this._dockSelected = null; this.h.onRerank(entry.id); },
+          }, "Re-rank"),
+          el("button", { class: "ghost", onclick: () => this._selectDockDeck(entry) }, "✕")
+        )
+      );
+    }
+    // Repaint selection outlines without a full relayout.
+    for (const t of this.root.querySelectorAll(".dock-thumb")) {
+      t.classList.toggle("selected", t.dataset.id === this._dockSelected);
+    }
   }
 
   _layoutDock() {
@@ -421,6 +469,16 @@ export class UI {
       gap -= 3;
     } while (maxLane >= MAX_LANES && gap > 3);
 
+    // Height cap: many similar scores can pile into a very tall stack (see
+    // dense playgroups). Rather than let the dock eat the screen, compress
+    // the vertical step so the tallest stack fits MAX_H — thumbs shingle
+    // like a fanned hand of cards, and every deck stays visible and
+    // tappable (tap → info bar → re-rank).
+    const MAX_H = W < 480 ? 92 : 130;
+    const laneStep = maxLane > 0
+      ? Math.min(LANE, Math.max(7, Math.floor((MAX_H - THUMB) / maxLane)))
+      : LANE;
+
     canvas.replaceChildren();
     for (const { e, x, lane } of placed) {
       const thumb = e.art
@@ -430,13 +488,16 @@ export class UI {
           })
         : this._placeholderThumb(e);
       thumb.title = `${e.name} (${e.owner}) — ${e.score.toFixed(2)}`;
+      thumb.dataset.id = e.id;
+      thumb.classList.toggle("selected", this._dockSelected === e.id);
+      thumb.addEventListener("click", () => this._selectDockDeck(e));
       thumb.style.left = `${x}px`;
-      thumb.style.bottom = `${lane * LANE}px`;
+      thumb.style.bottom = `${lane * laneStep}px`;
       thumb.style.width = thumb.style.height = `${THUMB}px`;
       thumb.style.zIndex = lane + 1; // upper stack levels render above
       canvas.append(thumb);
     }
-    canvas.style.height = `${maxLane * LANE + THUMB + 4}px`;
+    canvas.style.height = `${maxLane * laneStep + THUMB + 4}px`;
   }
 
   _placeholderThumb(e) {

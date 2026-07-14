@@ -182,8 +182,24 @@ button:disabled { opacity: 0.4; cursor: default; }
   color: var(--parchment-dim);
 }
 
-.answer-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-top: 1.2rem; }
-.answer-row button { padding: 0.9rem 0.4rem; font-weight: 600; }
+.duel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  align-items: stretch;
+}
+.duel .deck-card { margin-bottom: 0; display: flex; flex-direction: column; }
+.duel .deck-card .deck-name { font-size: 1.05rem; }
+.duel .deck-card .deck-owner { font-size: 0.78rem; }
+
+.deck-card.tappable { cursor: pointer; transition: border-color 100ms ease, transform 60ms ease; }
+.deck-card.tappable:hover { border-color: var(--focus); }
+.deck-card.tappable:active { transform: scale(0.98); }
+.deck-card.tappable:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.answer-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-top: 0.8rem; }
+.answer-row.single { grid-template-columns: 1fr; }
+.answer-row button { padding: 0.8rem 0.4rem; font-weight: 600; }
 .answer-row .same { background: transparent; }
 
 /* ---- commander art -------------------------------------------------------- */
@@ -197,7 +213,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .deck-art img {
   width: 100%;
-  height: 9.5rem;
+  height: 7.5rem;
   object-fit: cover;
   display: block;
 }
@@ -278,9 +294,27 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .dock-labels span { flex: 1; text-align: center; }
 
-/* Content must never hide behind the fixed dock. Generous because the dock
-   grows with stacking; the page just scrolls a little more. */
-#app { padding-bottom: 13rem; }
+.dock-info-slot { min-height: 0; }
+.dock-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.4rem 0.45rem;
+  font-size: 0.85rem;
+}
+.dock-info-name { flex: 1; font-family: var(--serif); line-height: 1.15; }
+.dock-info-name .who { font-family: var(--sans); color: var(--parchment-dim); font-size: 0.75rem; }
+.dock-info button { padding: 0.25rem 0.7rem; font-size: 0.8rem; }
+.dock-info button.ghost { background: transparent; border-color: transparent; color: var(--parchment-dim); }
+
+.dock-thumb.selected {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+  z-index: 98 !important;
+}
+
+/* Content must never hide behind the fixed dock (dock height is capped). */
+#app { padding-bottom: 11rem; }
 
 .notice.slim { padding: 0.6rem 0.9rem; font-size: 0.85rem; margin-bottom: 1rem; }
 
@@ -358,7 +392,15 @@ button:disabled { opacity: 0.4; cursor: default; }
   line-height: 1.5;
 }
 
-@media (max-width: 420px) {
-  .deck-name { font-size: 1.45rem; }
-  .answer-row { grid-template-columns: 1fr; }
+@media (max-width: 480px) {
+  .topbar .title { display: none; } /* player + progress matter more */
+  .topbar { padding-bottom: 0.6rem; }
+  .deck-name { font-size: 1.35rem; }
+  .deck-art img { height: 6rem; }
+  .deck-art.small img { height: 4.6rem; }
+  .bracket-btn { padding: 0.55rem 0.3rem; font-size: 0.92rem; }
+  .bracket-grid, .bracket-row { gap: 0.4rem; }
+  .deck-card { padding: 1rem 0.9rem; }
+  .deck-art { margin: -1rem -0.9rem 0.8rem; }
+  .deck-art.small { margin: -0.9rem -0.9rem 0.7rem; }
 }

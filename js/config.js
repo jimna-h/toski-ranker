@@ -1,7 +1,6 @@
 // ---------------------------------------------------------------------------
 // config.js — edit these two values, everything else should Just Work.
 // ---------------------------------------------------------------------------
-
 // Data sources — fill in ONE section:
 //
 // A) EASIEST — link-shared sheet, zero keys, zero Google Cloud setup:
@@ -14,13 +13,11 @@ export const PLAYER_TABS = [
   // "Sam", "Dave", "Alex",
   "James", "Ben R", "Kevin", "Michael R", "Michael J", "Will", "Ben M"
 ];
-
 // B) DATA_URL: any endpoint returning { sheets: [{ title, values }] }.
 //    For private sheets. Providers included: server/server.js (Node +
 //    service account) and apps-script/Code.gs (Apps Script proxy).
 //    Takes priority over A and C when non-empty.
 export const DATA_URL = "";
-
 // C) Link-shared sheet + Google Cloud API key. Auto-discovers tabs, so no
 //    PLAYER_TABS list to maintain, at the cost of API-key setup. Used when
 //    API_KEY is filled in and PLAYER_TABS is empty.
@@ -29,18 +26,14 @@ export const DATA_URL = "";
  *  (needed for both A and C) */
 export const SHEET_ID = "1HfTUoLol3h1DmDeWTDsUqYTjq99SV9NGi-CmB3Wk89g";
 export const API_KEY = "";
-
 /** Worksheet tabs to ignore entirely. */
 export const IGNORED_TABS = ["Precons"];
-
 /** Deck names to ignore (exact match, case-insensitive). */
 export const IGNORED_DECKS = ["PFP"];
-
 /** Version stamp for the localStorage schema. Bump this if the shape of the
  *  saved state ever changes incompatibly; old sessions will be discarded
  *  rather than half-loaded into a broken app. */
 export const SCHEMA_VERSION = 1;
-
 // ---------------------------------------------------------------------------
 // The 11 official EDH bracket tiers, ordered weakest → strongest.
 //
@@ -63,7 +56,6 @@ export const TIERS = [
   { id: "B4_HIGH", label: "B4 High", short: "4+", low: 4.6667,  high: 5.0     },
   { id: "B5",      label: "B5",      short: "5",  low: 5.0,     high: 6.0     },
 ];
-
 /** Lookup helpers */
 export const tierById = Object.fromEntries(TIERS.map((t) => [t.id, t]));
 export const tierIndex = Object.fromEntries(TIERS.map((t, i) => [t.id, i]));
