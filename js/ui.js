@@ -132,6 +132,20 @@ export class UI {
     return banner;
   }
 
+  /** "Decklist ↗" link, or nothing when the sheet has no Archidekt URL.
+   *  stopPropagation keeps it usable inside tappable duel cards — opening
+   *  the list must never count as answering the comparison. */
+  decklistLink(d) {
+    if (!d.archidektUrl) return "";
+    return el("a", {
+      class: "decklist-link",
+      href: d.archidektUrl,
+      target: "_blank",
+      rel: "noopener",
+      onclick: (e) => e.stopPropagation(),
+    }, "Decklist ↗");
+  }
+
   deckCard(deckId, { eyebrow = "Place this deck", small = false, tierId = null, onclick = null } = {}) {
     const d = this.deck(deckId);
     const attrs = { class: `deck-card${small ? " vs" : ""}${onclick ? " tappable" : ""}` };
@@ -151,7 +165,8 @@ export class UI {
       el("div", { class: "deck-owner" }, `${d.owner}'s deck`),
       ...(tierId
         ? [el("span", { class: "tier-chip" }, `currently in ${tierById[tierId].label}`)]
-        : [])
+        : []),
+      this.decklistLink(d)
     );
   }
 
@@ -476,6 +491,7 @@ export class UI {
           el("span", { class: "dock-info-name" },
             entry.name, " ",
             el("span", { class: "who" }, `· ${entry.owner} · ${entry.score.toFixed(2)}`)),
+          this.decklistLink(this.deck(entry.id)),
           el("button", {
             onclick: () => { this._dockSelected = null; this.h.onRerank(entry.id); },
           }, "Re-rank"),

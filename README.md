@@ -30,6 +30,9 @@ decimal ratings.
   deck's commander art sitting at its exact score — ties and near-scores
   stack vertically like a timeline. Hover/long-press a thumbnail for the
   deck name and score. It fills in live as you rank.
+- **Exclude column**: any row with the Exclude checkbox checked is left out
+  entirely. **Archidekt column**: when it holds a URL, a "Decklist ↗"
+  button appears on that deck's cards and dock popup; when empty, no button.
 - Sheet parsing: every worksheet tab is a player; the `Precons` tab and any
   deck named `PFP` are ignored (see `IGNORED_TABS` / `IGNORED_DECKS` in
   `js/config.js`). Only the `Deck Name` column is required; `Art_URL`,

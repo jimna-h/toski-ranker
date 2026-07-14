@@ -51,11 +51,13 @@ function parseTabRows(title, rows) {
   const colName = findColumn(header, "Deck Name");
   if (colName === -1) return []; // tab doesn't look like a deck list; skip it
 
-  // Optional columns — captured so future features (color identity badges,
-  // Archidekt links) don't need loader changes.
+  // Optional columns — captured so future features (color identity badges)
+  // don't need loader changes.
   const colArt = findColumn(header, "Art_URL");
   const colArtPartner = findColumn(header, "Art_URL_Partner");
   const colColorId = findColumn(header, "Color_ID");
+  const colExclude = findColumn(header, "Exclude");
+  const colArchidekt = findColumn(header, "Archidekt");
 
   const ignoredDecks = new Set(IGNORED_DECKS.map((d) => d.toLowerCase()));
   const decks = [];
@@ -63,12 +65,21 @@ function parseTabRows(title, rows) {
     const deckName = String(row[colName] ?? "").trim();
     if (!deckName) continue;
     if (ignoredDecks.has(deckName.toLowerCase())) continue;
+    // Sheet checkbox column: GViz renders checked boxes as "TRUE".
+    if (colExclude >= 0 && String(row[colExclude] ?? "").trim().toLowerCase() === "true") continue;
+
+    // Only accept Archidekt values that are actual links; stray text in the
+    // column shouldn't become a broken button.
+    const archidektRaw = colArchidekt >= 0 ? String(row[colArchidekt] ?? "").trim() : "";
+    const archidektUrl = /^https?:\/\//i.test(archidektRaw) ? archidektRaw : "";
+
     decks.push({
       deckName,
       owner: title.trim(),
       artUrl: colArt >= 0 ? String(row[colArt] ?? "").trim() : "",
       artUrlPartner: colArtPartner >= 0 ? String(row[colArtPartner] ?? "").trim() : "",
       colorId: colColorId >= 0 ? String(row[colColorId] ?? "").trim() : "",
+      archidektUrl,
     });
   }
   return decks;

@@ -165,6 +165,19 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .deck-card.vs { padding: 0.9rem 1rem; }
 .deck-card.vs .deck-name { font-size: 1.25rem; }
+.decklist-link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: var(--parchment-dim);
+  text-decoration: none;
+}
+.decklist-link:hover { color: var(--parchment); border-color: var(--focus); }
+.dock-info .decklist-link { margin-top: 0; flex: none; }
+
 .tier-chip {
   display: inline-block;
   margin-top: 0.4rem;
