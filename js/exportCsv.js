@@ -11,10 +11,14 @@
 import { computeScores } from "./scoring.js";
 import { tierById, EXPORT_EMAIL } from "./config.js";
 
-const HEADER = ["DeckID", "DeckName", "Owner", "Rater", "Bracket", "NumericRating"];
+/** RFC-4180-ish escaping: quote any field containing comma/quote/newline. */
+function csvField(value) {
+  const s = String(value ?? "");
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
 
-/** The shared row model every export format is built from. */
-function csvRows(state, catalog) {
+/** The shared row set behind every export path. */
+function buildRows(state, catalog) {
   const scores = computeScores(state.buckets);
   return [...scores.entries()]
     .map(([deckId, { score, tierId }]) => {
@@ -33,15 +37,9 @@ function csvRows(state, catalog) {
     .sort((a, b) => a.rating - b.rating);
 }
 
-/** RFC-4180-ish escaping: quote any field containing comma/quote/newline. */
-function csvField(value) {
-  const s = String(value ?? "");
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 export function buildCsv(state, catalog) {
-  const lines = [HEADER.join(",")];
-  for (const r of csvRows(state, catalog)) {
+  const lines = ["DeckID,DeckName,Owner,Rater,Bracket,NumericRating"];
+  for (const r of buildRows(state, catalog)) {
     lines.push(
       [r.deckId, csvField(r.name), csvField(r.owner), csvField(r.rater), r.bracket, r.rating].join(",")
     );
@@ -62,17 +60,6 @@ export function downloadCsv(state, catalog) {
   URL.revokeObjectURL(url);
 }
 
-/** TSV to the clipboard — pasting into Google Sheets splits into columns,
- *  so "Copy for spreadsheet" → Ctrl+V lands ready-made in the aggregation
- *  sheet. (Tabs never appear in the data, so no escaping needed.) */
-export async function copyForSheet(state, catalog) {
-  const lines = [HEADER.join("\t")];
-  for (const r of csvRows(state, catalog)) {
-    lines.push([r.deckId, r.name, r.owner, r.rater, r.bracket, r.rating].join("\t"));
-  }
-  await navigator.clipboard.writeText(lines.join("\n"));
-}
-
 /** Opens the user's mail app with the CSV preloaded in the body.
  *  mailto: can't attach files and some clients truncate very long bodies,
  *  so two defenses: (1) the file download fires first as the reliable copy,
@@ -89,8 +76,24 @@ export function emailCsv(state, catalog) {
     `If it doesn't, this email got cut off — attach the downloaded CSV file instead.\n\n` +
     buildCsv(state, catalog) +
     `\n=== END OF DATA ===`;
-  location.href =
+  const url =
     `mailto:${EXPORT_EMAIL}` +
     `?subject=${encodeURIComponent(subject)}` +
     `&body=${encodeURIComponent(body)}`;
+  const a = document.createElement("a");
+  a.href = url;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+/** Tab-separated rows to the clipboard — pastes straight into Google Sheets
+ *  as proper columns. Returns the clipboard promise so the UI can show
+ *  Copied!/failed feedback. */
+export function copyForSheet(state, catalog) {
+  const lines = ["DeckID\tDeckName\tOwner\tRater\tBracket\tNumericRating"];
+  for (const r of buildRows(state, catalog)) {
+    lines.push([r.deckId, r.name, r.owner, r.rater, r.bracket, r.rating].join("\t"));
+  }
+  return navigator.clipboard.writeText(lines.join("\n"));
 }
