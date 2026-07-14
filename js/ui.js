@@ -61,6 +61,9 @@ export class UI {
     this.h = handlers;
     this.catalog = null;
     this.session = null;
+    // The dock positions thumbnails in pixels, so it must relayout when the
+    // viewport changes (rotation, window resize).
+    window.addEventListener("resize", () => this._layoutDock());
   }
 
   deck(id) {
@@ -91,11 +94,7 @@ export class UI {
         }, "Undo"),
         " ",
         ...(showNav
-          ? [
-              el("button", { onclick: () => this.h.onOpenScale() }, "Scale"),
-              " ",
-              el("button", { onclick: () => this.h.onOpenEdit() }, "Review"),
-            ]
+          ? [el("button", { onclick: () => this.h.onOpenEdit() }, "Review")]
           : [])
       )
     );
@@ -227,7 +226,8 @@ export class UI {
       ),
       el("div", { class: "secondary-row" },
         el("button", { onclick: () => this.h.onDefer() }, "Come back later")
-      )
+      ),
+      this.dock()
     );
   }
 
@@ -243,7 +243,8 @@ export class UI {
         el("button", { onclick: () => this.h.onAnswer("weaker") }, "Weaker"),
         el("button", { class: "same", onclick: () => this.h.onAnswer("same") }, "About the same"),
         el("button", { onclick: () => this.h.onAnswer("stronger") }, "Stronger")
-      )
+      ),
+      this.dock()
     );
   }
 
@@ -267,7 +268,8 @@ export class UI {
           el("button", { onclick: () => this.h.onEdgeMove(step, false) }, `Keep in ${from.label}`),
           el("button", { onclick: () => this.h.onEdgeMove(step, true) }, `Move to ${destLabel}`)
         )
-      )
+      ),
+      this.dock()
     );
   }
 
@@ -284,7 +286,8 @@ export class UI {
           el("button", { onclick: () => this.h.onResolvePlace() }, "Make my best guess"),
           el("button", { onclick: () => this.h.onSkip() }, "Skip this deck")
         )
-      )
+      ),
+      this.dock()
     );
   }
 
@@ -342,63 +345,104 @@ export class UI {
       container,
       el("div", { class: "secondary-row" },
         el("button", { onclick: () => this.h.onCloseEdit() }, "Back to ranking")
-      )
+      ),
+      this.dock()
     );
   }
 
-  /** The Scale: every placed deck on a continuous power gradient.
-   *  Ordered strongest → weakest, each row tinted by its exact score's
-   *  position on the jade→ember axis, with labeled separators wherever a
-   *  bracket boundary is crossed. This is the "one glance shows the whole
-   *  collection" view the tier buttons have been hinting at all along. */
-  renderScale() {
-    this.clear();
-    this.root.append(...this.topbar(false));
+  /* ---- the Dock: an always-visible horizontal power timeline -------------
+     Fixed to the bottom of every session screen. The axis is the jade→ember
+     gradient running weak → strong; each placed deck's art sits ON the axis
+     at its exact decimal score, like events on a timeline. When two decks
+     would overlap horizontally (ties land at identical x), they stack
+     vertically instead, and the dock grows upward to fit. ------------------*/
 
+  dock() {
     const scores = computeScores(this.session.state.buckets);
-    const rows = [...scores.entries()]
-      .map(([id, { score, tierId }]) => ({ id, score, tierId }))
-      .sort((a, b) => b.score - a.score); // strongest first
+    // Ascending score; ties ordered by name so stacks are stable frame to frame.
+    this._dockEntries = [...scores.entries()]
+      .map(([id, { score }]) => {
+        const d = this.deck(id);
+        return { id, score, name: d.deckName, owner: d.owner, art: d.artUrl };
+      })
+      .sort((a, b) => a.score - b.score || a.name.localeCompare(b.name));
 
-    const container = el("div", { class: "scale" });
-    if (!rows.length) {
-      container.append(el("p", { class: "sub" }, "Nothing placed yet — the scale fills in as you rank."));
+    const canvas = el("div", { class: "dock-canvas" });
+
+    // Axis bar + boundary ticks. Majors at whole brackets, minors at the
+    // Low/Mid/High thirds — same 1..6 → 0..1 mapping as the thumbnails.
+    const axis = el("div", { class: "dock-axis" });
+    const tickAt = (v, major) =>
+      el("span", {
+        class: `dock-tick${major ? " major" : ""}`,
+        style: `left:${((v - 1) / 5) * 100}%`,
+      });
+    for (const v of [2, 3, 4, 5]) axis.append(tickAt(v, true));
+    for (const base of [2, 3, 4]) {
+      axis.append(tickAt(base + 1 / 3, false), tickAt(base + 2 / 3, false));
     }
 
-    let lastTier = null;
-    for (const r of rows) {
-      if (r.tierId !== lastTier) {
-        container.append(
-          el("div", {
-            class: "scale-sep",
-            style: `--tint:${TIER_TINT[r.tierId]}`,
-          }, tierById[r.tierId].label)
-        );
-        lastTier = r.tierId;
-      }
-      const d = this.deck(r.id);
-      // Normalize score 1..6 → 0..1 along the power axis for the row tint.
-      const tint = powerTint((r.score - 1) / 5);
-      const row = el("div", { class: "scale-row", style: `--tint:${tint}` },
-        d.artUrl
-          ? el("img", { class: "scale-thumb", src: d.artUrl, alt: "", loading: "lazy",
-              onerror: (e) => e.target.remove() })
-          : el("span", { class: "scale-thumb placeholder" }),
-        el("span", { class: "scale-name" },
-          d.deckName, " ",
-          el("span", { class: "who" }, `· ${d.owner}`)),
-        el("span", { class: "scale-score" }, r.score.toFixed(2))
-      );
-      container.append(row);
-    }
-
-    this.root.append(
-      container,
-      el("div", { class: "secondary-row" },
-        el("button", { onclick: () => this.h.onCloseEdit() }, "Back to ranking"),
-        el("button", { onclick: () => this.h.onOpenEdit() }, "Review / re-rank")
-      )
+    const labels = el("div", { class: "dock-labels" },
+      ...["B1", "B2", "B3", "B4", "B5"].map((b) => el("span", {}, b))
     );
+
+    const dock = el("div", { class: "dock" }, canvas, axis, labels);
+    // Layout needs real pixel widths, which only exist once in the DOM.
+    requestAnimationFrame(() => this._layoutDock());
+    return dock;
+  }
+
+  _layoutDock() {
+    const canvas = this.root.querySelector(".dock-canvas");
+    if (!canvas || !this._dockEntries) return;
+    const W = canvas.clientWidth;
+    const THUMB = W < 480 ? 26 : 34; // smaller thumbs on phones
+    const LANE = Math.round(THUMB * 0.76); // vertical step (slight shingle)
+    const MAX_LANES = 5;
+
+    // Adaptive density: start with comfortable horizontal spacing; if the
+    // stacks grow too tall for the viewport, tighten the gap (thumbs shingle
+    // harder) until the tallest stack fits. Exact ties always stack no
+    // matter the gap, which is precisely the behavior we want.
+    let gap = Math.round(THUMB * 0.6);
+    let placed, maxLane;
+    do {
+      placed = [];
+      maxLane = 0;
+      const laneRight = [];
+      for (const e of this._dockEntries) {
+        const x = ((e.score - 1) / 5) * (W - THUMB);
+        let lane = 0;
+        while (laneRight[lane] !== undefined && x - laneRight[lane] < gap) lane++;
+        laneRight[lane] = x;
+        maxLane = Math.max(maxLane, lane);
+        placed.push({ e, x, lane });
+      }
+      gap -= 3;
+    } while (maxLane >= MAX_LANES && gap > 3);
+
+    canvas.replaceChildren();
+    for (const { e, x, lane } of placed) {
+      const thumb = e.art
+        ? el("img", {
+            class: "dock-thumb", src: e.art, alt: e.name, loading: "lazy",
+            onerror: (ev) => ev.target.replaceWith(this._placeholderThumb(e)),
+          })
+        : this._placeholderThumb(e);
+      thumb.title = `${e.name} (${e.owner}) — ${e.score.toFixed(2)}`;
+      thumb.style.left = `${x}px`;
+      thumb.style.bottom = `${lane * LANE}px`;
+      thumb.style.width = thumb.style.height = `${THUMB}px`;
+      thumb.style.zIndex = lane + 1; // upper stack levels render above
+      canvas.append(thumb);
+    }
+    canvas.style.height = `${maxLane * LANE + THUMB + 4}px`;
+  }
+
+  _placeholderThumb(e) {
+    // No art URL: a monogram chip so the deck still shows on the timeline.
+    const initials = e.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+    return el("span", { class: "dock-thumb placeholder" }, initials);
   }
 
   /** All decks handled: summary + export. */
@@ -424,10 +468,10 @@ export class UI {
           : "",
         el("div", { class: "secondary-row" },
           el("button", { onclick: () => this.h.onExport(), style: "font-weight:600" }, "Download CSV"),
-          el("button", { onclick: () => this.h.onOpenScale() }, "View scale"),
           el("button", { onclick: () => this.h.onOpenEdit() }, "Review placements")
         )
-      )
+      ),
+      this.dock()
     );
   }
 }

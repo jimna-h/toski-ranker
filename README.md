@@ -75,10 +75,11 @@ key with the Sheets API enabled (referrer-restricted), fill in `SHEET_ID` +
   small notice says what changed. Renaming a deck (or its owner tab)
   changes its deterministic ID, so it's treated as delete + add and gets
   re-ranked — rename before the campaign if possible.
-- **The Scale view** (button in the top bar) shows every placed deck's
-  commander art on a continuous power gradient, strongest to weakest, with
-  labeled bracket separators — a live preview of the final aggregate
-  visualization, per-player for now.
+- **The power timeline** is docked to the bottom of every screen: a
+  jade→ember axis running weak (left) → strong (right), with each placed
+  deck's commander art sitting at its exact score — ties and near-scores
+  stack vertically like a timeline. Hover/long-press a thumbnail for the
+  deck name and score. It fills in live as you rank.
 - Sheet parsing: every worksheet tab is a player; the `Precons` tab and any
   deck named `PFP` are ignored (see `IGNORED_TABS` / `IGNORED_DECKS` in
   `js/config.js`). Only the `Deck Name` column is required; `Art_URL`,

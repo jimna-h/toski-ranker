@@ -21,7 +21,7 @@ let players = [];
 const ui = new UI(document.getElementById("app"), {
   onStart, onBracket, onAnswer, onDefer, onSkip,
   onUndo, onEdgeMove, onRerank, onExport, onOpenEdit, onCloseEdit,
-  onResolvePlace, onOpenScale,
+  onResolvePlace,
 });
 
 /** Route a ranking-engine step descriptor to the right screen. */
@@ -63,9 +63,6 @@ function onStart(player) {
   proceed();
 }
 
-function onOpenScale() {
-  ui.renderScale();
-}
 
 function onBracket(tierId) {
   session.snapshot();

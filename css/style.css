@@ -205,56 +205,82 @@ button:disabled { opacity: 0.4; cursor: default; }
 .deck-art.small { margin: -0.9rem -1rem 0.7rem; }
 .deck-art.small img { height: 5.5rem; }
 
-/* ---- the Scale: continuous power gradient --------------------------------- */
+/* ---- the Dock: always-visible power timeline ------------------------------
+   Fixed to the bottom edge. The axis gradient runs weak (jade, left) →
+   strong (ember, right); thumbnails sit ON the axis at their score and
+   stack upward when they'd collide. Heights are set by JS layout. --------- */
 
-.scale { margin-top: 0.4rem; }
+.dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0.5rem 0.9rem calc(0.45rem + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--felt) 88%, transparent);
+  backdrop-filter: blur(6px);
+  border-top: 1px solid var(--line);
+  z-index: 50;
+}
 
-.scale-sep {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin: 1rem 0 0.4rem;
-  font-size: 0.75rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--parchment-dim);
+.dock-canvas {
+  position: relative;
+  height: 38px;          /* JS grows this as stacks form */
+  transition: height 160ms ease;
 }
-.scale-sep::before, .scale-sep::after {
-  content: "";
-  height: 1px;
-  background: var(--tint);
-  flex: 0 0 1.4rem;
-}
-.scale-sep::after { flex: 1; opacity: 0.35; }
 
-.scale-row {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  padding: 0.3rem 0.6rem 0.3rem 0.3rem;
-  margin-bottom: 3px;
-  border-radius: 6px;
-  /* the row's exact score, made visible: tint fades in from the left */
-  background: linear-gradient(90deg,
-    color-mix(in srgb, var(--tint) 28%, var(--felt-raised)) 0%,
-    var(--felt-raised) 70%);
-  border: 1px solid var(--line);
-}
-.scale-thumb {
-  width: 4.2rem;
-  height: 2.6rem;
+.dock-thumb {
+  position: absolute;
+  width: 34px;
+  height: 34px;
   object-fit: cover;
-  border-radius: 4px;
-  flex: none;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45);
+  background: var(--felt-raised);
+  cursor: default;
+  transition: transform 100ms ease;
 }
-.scale-thumb.placeholder { background: var(--felt); border: 1px dashed var(--line); }
-.scale-name { flex: 1; font-family: var(--serif); font-size: 0.95rem; line-height: 1.2; }
-.scale-name .who { font-family: var(--sans); color: var(--parchment-dim); font-size: 0.75rem; }
-.scale-score {
-  font-variant-numeric: tabular-nums;
-  font-size: 0.8rem;
+.dock-thumb:hover {
+  transform: scale(1.9);
+  z-index: 99 !important; /* hovered thumb above every stack level */
+}
+.dock-thumb.placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 600;
   color: var(--parchment-dim);
 }
+
+.dock-axis {
+  position: relative;
+  height: 7px;
+  margin-top: 3px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--p1), var(--p2), var(--p3), var(--p4), var(--p5));
+}
+.dock-tick {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.35);
+}
+.dock-tick.major { width: 2px; background: var(--felt); }
+
+.dock-labels {
+  display: flex;
+  margin-top: 2px;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  color: var(--parchment-dim);
+}
+.dock-labels span { flex: 1; text-align: center; }
+
+/* Content must never hide behind the fixed dock. Generous because the dock
+   grows with stacking; the page just scrolls a little more. */
+#app { padding-bottom: 13rem; }
 
 .notice.slim { padding: 0.6rem 0.9rem; font-size: 0.85rem; margin-bottom: 1rem; }
 
