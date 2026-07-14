@@ -8,8 +8,8 @@
 //
 // This module is deliberately the only file that knows anything about
 // Google. It returns plain arrays of { deckName, owner, artUrl,
-// artUrlPartner, colorId }; if the data source ever changes, only this
-// file needs to be replaced.
+// artUrlPartner, colorId, archidektUrl }; if the data source ever changes,
+// only this file needs to be replaced.
 // ---------------------------------------------------------------------------
 
 import { SHEET_ID, PLAYER_TABS, IGNORED_TABS, IGNORED_DECKS } from "./config.js";
