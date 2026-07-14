@@ -186,6 +186,78 @@ button:disabled { opacity: 0.4; cursor: default; }
 .answer-row button { padding: 0.9rem 0.4rem; font-weight: 600; }
 .answer-row .same { background: transparent; }
 
+/* ---- commander art -------------------------------------------------------- */
+
+.deck-art {
+  margin: -1.4rem -1.2rem 1rem; /* bleed to the card edges */
+  border-radius: var(--radius) var(--radius) 0 0;
+  overflow: hidden;
+  display: grid;
+  background: var(--felt);
+}
+.deck-art img {
+  width: 100%;
+  height: 9.5rem;
+  object-fit: cover;
+  display: block;
+}
+.deck-art.partners { grid-template-columns: 1fr 1fr; gap: 2px; }
+.deck-art.small { margin: -0.9rem -1rem 0.7rem; }
+.deck-art.small img { height: 5.5rem; }
+
+/* ---- the Scale: continuous power gradient --------------------------------- */
+
+.scale { margin-top: 0.4rem; }
+
+.scale-sep {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 1rem 0 0.4rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--parchment-dim);
+}
+.scale-sep::before, .scale-sep::after {
+  content: "";
+  height: 1px;
+  background: var(--tint);
+  flex: 0 0 1.4rem;
+}
+.scale-sep::after { flex: 1; opacity: 0.35; }
+
+.scale-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.3rem 0.6rem 0.3rem 0.3rem;
+  margin-bottom: 3px;
+  border-radius: 6px;
+  /* the row's exact score, made visible: tint fades in from the left */
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--tint) 28%, var(--felt-raised)) 0%,
+    var(--felt-raised) 70%);
+  border: 1px solid var(--line);
+}
+.scale-thumb {
+  width: 4.2rem;
+  height: 2.6rem;
+  object-fit: cover;
+  border-radius: 4px;
+  flex: none;
+}
+.scale-thumb.placeholder { background: var(--felt); border: 1px dashed var(--line); }
+.scale-name { flex: 1; font-family: var(--serif); font-size: 0.95rem; line-height: 1.2; }
+.scale-name .who { font-family: var(--sans); color: var(--parchment-dim); font-size: 0.75rem; }
+.scale-score {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  color: var(--parchment-dim);
+}
+
+.notice.slim { padding: 0.6rem 0.9rem; font-size: 0.85rem; margin-bottom: 1rem; }
+
 /* ---- dialogs (edge prompt / place-or-skip) ------------------------------- */
 
 .notice {

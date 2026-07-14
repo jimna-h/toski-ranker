@@ -7,6 +7,7 @@
 // ---------------------------------------------------------------------------
 
 import { TIERS, tierById } from "./config.js";
+import { computeScores } from "./scoring.js";
 
 /* ---- power-gradient tints -------------------------------------------------
    Each of the 11 tiers gets a color sampled from the jade→amber→ember axis.
@@ -72,7 +73,7 @@ export class UI {
 
   /* ---- shared chrome ---- */
 
-  topbar(showEdit = true) {
+  topbar(showNav = true) {
     const placed = this.session.placedCount();
     const total = this.session.totalCount();
     const bar = el(
@@ -89,8 +90,12 @@ export class UI {
           title: "Undo last action",
         }, "Undo"),
         " ",
-        ...(showEdit
-          ? [el("button", { onclick: () => this.h.onOpenEdit() }, "Review")]
+        ...(showNav
+          ? [
+              el("button", { onclick: () => this.h.onOpenScale() }, "Scale"),
+              " ",
+              el("button", { onclick: () => this.h.onOpenEdit() }, "Review"),
+            ]
           : [])
       )
     );
@@ -102,7 +107,30 @@ export class UI {
         style: `width:${total ? (placed / total) * 100 : 0}%`,
       })
     );
-    return [bar, track];
+    // One-shot notice (e.g. "sheet changed: 2 decks added") set by main.js.
+    const pieces = [bar, track];
+    if (this.flash) {
+      pieces.push(el("div", { class: "notice slim" }, this.flash));
+      this.flash = null;
+    }
+    return pieces;
+  }
+
+  /** Commander art banner: one image, or two side-by-side for partners.
+   *  Broken/missing URLs degrade to no banner — the card stays text-only. */
+  artBanner(deck, small = false) {
+    const urls = [deck.artUrl, deck.artUrlPartner].filter(Boolean);
+    if (!urls.length) return "";
+    const banner = el("div", { class: `deck-art${urls.length === 2 ? " partners" : ""}${small ? " small" : ""}` });
+    for (const url of urls) {
+      banner.append(el("img", {
+        src: url,
+        alt: "",             // decorative; the deck name is the content
+        loading: "lazy",
+        onerror: (e) => e.target.closest(".deck-art")?.remove(),
+      }));
+    }
+    return banner;
   }
 
   deckCard(deckId, { eyebrow = "Place this deck", small = false, tierId = null } = {}) {
@@ -110,6 +138,7 @@ export class UI {
     return el(
       "div",
       { class: `deck-card${small ? " vs" : ""}` },
+      this.artBanner(d, small),
       el("div", { class: "eyebrow" }, eyebrow),
       el("h2", { class: "deck-name" }, d.deckName),
       el("div", { class: "deck-owner" }, `${d.owner}'s deck`),
@@ -317,6 +346,61 @@ export class UI {
     );
   }
 
+  /** The Scale: every placed deck on a continuous power gradient.
+   *  Ordered strongest → weakest, each row tinted by its exact score's
+   *  position on the jade→ember axis, with labeled separators wherever a
+   *  bracket boundary is crossed. This is the "one glance shows the whole
+   *  collection" view the tier buttons have been hinting at all along. */
+  renderScale() {
+    this.clear();
+    this.root.append(...this.topbar(false));
+
+    const scores = computeScores(this.session.state.buckets);
+    const rows = [...scores.entries()]
+      .map(([id, { score, tierId }]) => ({ id, score, tierId }))
+      .sort((a, b) => b.score - a.score); // strongest first
+
+    const container = el("div", { class: "scale" });
+    if (!rows.length) {
+      container.append(el("p", { class: "sub" }, "Nothing placed yet — the scale fills in as you rank."));
+    }
+
+    let lastTier = null;
+    for (const r of rows) {
+      if (r.tierId !== lastTier) {
+        container.append(
+          el("div", {
+            class: "scale-sep",
+            style: `--tint:${TIER_TINT[r.tierId]}`,
+          }, tierById[r.tierId].label)
+        );
+        lastTier = r.tierId;
+      }
+      const d = this.deck(r.id);
+      // Normalize score 1..6 → 0..1 along the power axis for the row tint.
+      const tint = powerTint((r.score - 1) / 5);
+      const row = el("div", { class: "scale-row", style: `--tint:${tint}` },
+        d.artUrl
+          ? el("img", { class: "scale-thumb", src: d.artUrl, alt: "", loading: "lazy",
+              onerror: (e) => e.target.remove() })
+          : el("span", { class: "scale-thumb placeholder" }),
+        el("span", { class: "scale-name" },
+          d.deckName, " ",
+          el("span", { class: "who" }, `· ${d.owner}`)),
+        el("span", { class: "scale-score" }, r.score.toFixed(2))
+      );
+      container.append(row);
+    }
+
+    this.root.append(
+      container,
+      el("div", { class: "secondary-row" },
+        el("button", { onclick: () => this.h.onCloseEdit() }, "Back to ranking"),
+        el("button", { onclick: () => this.h.onOpenEdit() }, "Review / re-rank")
+      )
+    );
+  }
+
   /** All decks handled: summary + export. */
   renderDone() {
     this.clear();
@@ -340,6 +424,7 @@ export class UI {
           : "",
         el("div", { class: "secondary-row" },
           el("button", { onclick: () => this.h.onExport(), style: "font-weight:600" }, "Download CSV"),
+          el("button", { onclick: () => this.h.onOpenScale() }, "View scale"),
           el("button", { onclick: () => this.h.onOpenEdit() }, "Review placements")
         )
       )

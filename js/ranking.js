@@ -187,3 +187,70 @@ export function rerankDeck(state, deckId) {
   delete state.deferCounts[deckId];
   state.queue.unshift(deckId);
 }
+
+/**
+ * Reconcile a saved session with a freshly loaded catalog — the sheet is
+ * the source of truth for WHICH decks exist; the session remains the source
+ * of truth for the user's judgments about them.
+ *   • Decks added to the sheet    → appended to the queue (shuffled batch).
+ *   • Decks removed from the sheet → pruned from queue/buckets/etc.
+ *   • Renamed decks change their deterministic ID, so they intentionally
+ *     count as removed + added and get re-ranked.
+ * Returns { added, removed } counts so the UI can mention it.
+ */
+export function reconcileWithCatalog(state, catalogIds) {
+  const known = new Set(catalogIds);
+  const seen = new Set();
+  let removed = 0;
+
+  // Prune buckets, dropping emptied tie-groups and tiers.
+  for (const [tier, groups] of Object.entries(state.buckets)) {
+    for (let g = groups.length - 1; g >= 0; g--) {
+      const kept = groups[g].filter((id) => known.has(id));
+      removed += groups[g].length - kept.length;
+      if (kept.length) {
+        groups[g] = kept;
+        kept.forEach((id) => seen.add(id));
+      } else {
+        groups.splice(g, 1);
+      }
+    }
+    if (groups.length === 0) delete state.buckets[tier];
+  }
+
+  // Prune flat lists.
+  for (const key of ["queue", "deferred", "skipped"]) {
+    const kept = state[key].filter((id) => known.has(id));
+    removed += state[key].length - kept.length;
+    state[key] = kept;
+    kept.forEach((id) => seen.add(id));
+  }
+
+  // An in-progress insertion: cancel it if its deck vanished, or if pruning
+  // shrank its bucket enough to invalidate the search bounds — the deck
+  // goes back to the queue front and the user simply re-picks its bracket.
+  if (state.current) {
+    const cur = state.current;
+    const groups = state.buckets[cur.tier] ?? [];
+    if (!known.has(cur.deckId)) {
+      state.current = null;
+      removed++;
+    } else if (cur.hi > groups.length) {
+      state.current = null;
+      state.queue.unshift(cur.deckId);
+      seen.add(cur.deckId);
+    } else {
+      seen.add(cur.deckId);
+    }
+  }
+
+  // Append newcomers, shuffled among themselves.
+  const added = catalogIds.filter((id) => !seen.has(id));
+  for (let i = added.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [added[i], added[j]] = [added[j], added[i]];
+  }
+  state.queue.push(...added);
+
+  return { added: added.length, removed };
+}

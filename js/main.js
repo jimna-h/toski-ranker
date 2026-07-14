@@ -9,7 +9,7 @@ import { Catalog } from "./catalog.js";
 import { Session } from "./state.js";
 import {
   nextStep, chooseBracket, answerComparison, deferCurrent,
-  skipCurrent, acceptEdgeMove, rerankDeck,
+  skipCurrent, acceptEdgeMove, rerankDeck, reconcileWithCatalog,
 } from "./ranking.js";
 import { downloadCsv } from "./exportCsv.js";
 import { UI } from "./ui.js";
@@ -21,7 +21,7 @@ let players = [];
 const ui = new UI(document.getElementById("app"), {
   onStart, onBracket, onAnswer, onDefer, onSkip,
   onUndo, onEdgeMove, onRerank, onExport, onOpenEdit, onCloseEdit,
-  onResolvePlace,
+  onResolvePlace, onOpenScale,
 });
 
 /** Route a ranking-engine step descriptor to the right screen. */
@@ -43,9 +43,28 @@ function proceed() {
 /* ---- handlers ------------------------------------------------------------ */
 
 function onStart(player) {
-  session = Session.load(player) ?? Session.start(player, catalog.allIds());
+  const existing = Session.load(player);
+  if (existing) {
+    // The sheet may have changed since this session was saved: sync the
+    // saved state with the fresh catalog before resuming.
+    const { added, removed } = reconcileWithCatalog(existing.state, catalog.allIds());
+    if (added || removed) {
+      const bits = [];
+      if (added) bits.push(`${added} new deck${added === 1 ? "" : "s"} added to your queue`);
+      if (removed) bits.push(`${removed} removed deck${removed === 1 ? "" : "s"} cleared`);
+      ui.flash = `The sheet changed since last time: ${bits.join(", ")}.`;
+    }
+    existing.commit();
+    session = existing;
+  } else {
+    session = Session.start(player, catalog.allIds());
+  }
   ui.session = session;
   proceed();
+}
+
+function onOpenScale() {
+  ui.renderScale();
 }
 
 function onBracket(tierId) {
