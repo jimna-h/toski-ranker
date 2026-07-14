@@ -21,7 +21,7 @@ let players = [];
 const ui = new UI(document.getElementById("app"), {
   onStart, onBracket, onAnswer, onDefer, onSkip,
   onUndo, onEdgeMove, onRerank, onExport, onOpenEdit, onCloseEdit,
-  onResolvePlace, onResetSession, onEmail, onCopy,
+  onResolvePlace, onResetSession, onEmail, onCopy, onHome,
 });
 
 /** Route a ranking-engine step descriptor to the right screen. */
@@ -75,7 +75,6 @@ function onStart(player, scope) {
   ui.session = session;
   proceed();
 }
-
 
 function onBracket(tierId) {
   session.snapshot();
@@ -161,6 +160,25 @@ function onCopy() {
   return copyForSheet(session.state, catalog); // promise: UI shows Copied!/failed
 }
 
+/** The start screen, reachable from boot and from the title button.
+ *  Leaving mid-session is always safe: every action was already committed
+ *  to localStorage, so Resume picks up exactly where the user left off. */
+function showStart() {
+  ui.renderStart(players, (player) => {
+    const existing = Session.load(player);
+    return existing
+      ? {
+          progress: `${existing.placedCount()}/${existing.totalCount()}`,
+          scope: existing.state.scope ?? "all",
+        }
+      : null;
+  });
+}
+
+function onHome() {
+  showStart();
+}
+
 function onOpenEdit() {
   ui.renderEdit();
 }
@@ -182,15 +200,7 @@ async function boot() {
       ui.renderError("The sheet loaded, but no decks were found. Check the 'Deck Name' column headers.");
       return;
     }
-    ui.renderStart(players, (player) => {
-      const existing = Session.load(player);
-      return existing
-        ? {
-            progress: `${existing.placedCount()}/${existing.totalCount()}`,
-            scope: existing.state.scope ?? "all",
-          }
-        : null;
-    });
+    showStart();
   } catch (err) {
     ui.renderError(err.message);
   }
