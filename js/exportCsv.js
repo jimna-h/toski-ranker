@@ -75,16 +75,20 @@ export async function copyForSheet(state, catalog) {
 
 /** Opens the user's mail app with the CSV preloaded in the body.
  *  mailto: can't attach files and some clients truncate very long bodies,
- *  so this also triggers the file download first — the body opens with a
- *  note to attach that file if the pasted data looks cut off. A truncated
- *  email should never be able to silently corrupt the aggregate. */
+ *  so two defenses: (1) the file download fires first as the reliable copy,
+ *  and (2) the body ends with an END OF DATA sentinel — the header tells
+ *  the sender to check for it before hitting Send, making truncation
+ *  self-evident instead of silent. The sentinel lives only in the email,
+ *  never in the downloaded file, so pasted aggregates stay clean. */
 export function emailCsv(state, catalog) {
   downloadCsv(state, catalog); // the reliable copy
   const subject = `EDH Rankings — ${state.player}`;
   const body =
     `Rankings from ${state.player}. Paste-ready CSV below.\n` +
-    `(A CSV file was also downloaded — if the data below looks cut off, attach that file instead.)\n\n` +
-    buildCsv(state, catalog);
+    `IMPORTANT: the last line below should say "=== END OF DATA ===". ` +
+    `If it doesn't, this email got cut off — attach the downloaded CSV file instead.\n\n` +
+    buildCsv(state, catalog) +
+    `\n=== END OF DATA ===`;
   location.href =
     `mailto:${EXPORT_EMAIL}` +
     `?subject=${encodeURIComponent(subject)}` +
