@@ -487,11 +487,11 @@ button:disabled { opacity: 0.4; cursor: default; }
   .topbar .title { font-size: 0.9rem; }
   .topbar { padding-bottom: 0.6rem; }
   .deck-name { font-size: 1.35rem; }
-  .deck-art img { height: 6rem; }
+  /*.deck-art img { height: 6rem; }*/
   .deck-art.small img { height: 4.6rem; }
   .bracket-btn { padding: 0.55rem 0.3rem; font-size: 0.92rem; }
   .bracket-grid, .bracket-row { gap: 0.4rem; }
   .deck-card { padding: 0.9rem 0.9rem; }
-  .deck-art { margin: -0.9rem -0.9rem 0.7rem; }
+  /*.deck-art { margin: -0.9rem -0.9rem 0.7rem; }*/
   .deck-art.small { margin: -0.9rem -0.9rem 0.7rem; }
 }
