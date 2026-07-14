@@ -6,20 +6,66 @@ bracket tap plus a few binary-insertion comparisons, progress autosaves to
 localStorage, and the result exports as a CSV with deterministic deck IDs and
 decimal ratings.
 
-## Setup
+## Setup — pick one data source
 
-1. **Share the Google Sheet** as "Anyone with the link can view".
-2. **Create an API key** in Google Cloud Console:
-   - Create a project (or reuse one) → APIs & Services → enable **Google Sheets API**.
-   - Credentials → Create credentials → **API key**.
-   - Restrict the key: *Application restrictions* → HTTP referrers → add your
-     hosting URL (e.g. `https://yourname.github.io/*`).
-     *API restrictions* → Google Sheets API only.
-3. **Edit `js/config.js`**: paste `SHEET_ID` (from the sheet URL) and `API_KEY`.
-4. **Serve the folder over HTTP** — ES modules don't run from `file://`.
-   Locally: `python3 -m http.server` in this folder, then open
-   `http://localhost:8000`. For the group: GitHub Pages, Netlify, or any
-   static host works.
+All feed the same loader; `js/config.js` decides which is active.
+
+### Option 1: link-shared sheet, zero keys (recommended)
+
+1. Share the sheet **"Anyone with the link can view"**.
+2. In `js/config.js`: paste `SHEET_ID` and list your players' tab names in
+   `PLAYER_TABS` (Google's keyless CSV endpoint can't discover tabs, so the
+   list must be kept in sync if a player joins/renames — that's the whole
+   trade-off).
+3. Serve the folder over HTTP (`python3 -m http.server` locally, or GitHub
+   Pages / Netlify for the group — it's a pure static site in this mode).
+
+### Option 2: your existing service account (`server/server.js`)
+
+Best if you already run something server-side with a service account that
+can read the sheet. The sheet stays private and there's no new Google setup.
+
+1. `cd server && npm install`
+2. Put the service-account JSON key on the server (outside any web root).
+3. `SHEET_ID=<your-sheet-id> KEY_FILE=/path/to/key.json node server.js`
+4. In `js/config.js`: `DATA_URL = "/api/decks"`.
+5. Open `http://localhost:8787` (the server also serves the app itself).
+
+**Deploying on Render** (a `render.yaml` blueprint is included):
+
+1. Push this folder to a Git repo and create a new **Web Service** on Render
+   (or use "New → Blueprint" to pick up `render.yaml` automatically).
+   Manual settings if not using the blueprint:
+   *Build command* `cd server && npm install`, *Start command*
+   `node server/server.js`.
+2. In the service's **Environment** tab:
+   - Add env var `SHEET_ID` = your sheet's ID.
+   - Add a **Secret File** named `service-account.json` with the contents of
+     your service-account key; it mounts at `/etc/secrets/service-account.json`,
+     which is where the `KEY_FILE` env var already points. Never commit the
+     key to the repo.
+3. Set `DATA_URL = "/api/decks"` in `js/config.js` before pushing — the
+   same service serves both the app and the data, so the relative URL works
+   as-is. Share the Render URL with your playgroup and you're live.
+
+Note: Render's free tier spins down idle services, so the first visit after
+a quiet spell takes ~30s to wake. Fine for a ranking night; just warn the
+group, or use a paid instance if it annoys you.
+
+### Option 3: Apps Script proxy (`apps-script/Code.gs`)
+
+Best if you don't want to host anything. Sheet stays private; a tiny script
+runs as the sheet owner. Extensions → Apps Script → paste `Code.gs` →
+Deploy as Web app (*Execute as: Me*, *Access: Anyone*) → paste the `/exec`
+URL into `DATA_URL`. Details and caveats are in the file's comments.
+Then serve the folder over any static host (`python3 -m http.server`,
+GitHub Pages, etc.).
+
+### Option 4: link-shared sheet + API key
+
+Share the sheet "anyone with the link can view", create a Google Cloud API
+key with the Sheets API enabled (referrer-restricted), fill in `SHEET_ID` +
+`API_KEY`. `DATA_URL` takes priority when set, so leave it empty.
 
 ## Notes
 

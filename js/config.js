@@ -2,14 +2,32 @@
 // config.js — edit these two values, everything else should Just Work.
 // ---------------------------------------------------------------------------
 
+// Data sources — fill in ONE section:
+//
+// A) EASIEST — link-shared sheet, zero keys, zero Google Cloud setup:
+//    1. Share the sheet "Anyone with the link can view".
+//    2. Paste SHEET_ID below (the long ID from the sheet's URL).
+//    3. List your players' worksheet tab names here (Google's keyless
+//       endpoint can't enumerate tabs, so we tell it which ones exist —
+//       just keep this in sync if someone joins the group):
+export const PLAYER_TABS = [
+  // "Sam", "Dave", "Alex",
+];
+
+// B) DATA_URL: any endpoint returning { sheets: [{ title, values }] }.
+//    For private sheets. Providers included: server/server.js (Node +
+//    service account) and apps-script/Code.gs (Apps Script proxy).
+//    Takes priority over A and C when non-empty.
+export const DATA_URL = "";
+
+// C) Link-shared sheet + Google Cloud API key. Auto-discovers tabs, so no
+//    PLAYER_TABS list to maintain, at the cost of API-key setup. Used when
+//    API_KEY is filled in and PLAYER_TABS is empty.
 /** The long ID from your Google Sheet URL:
  *  https://docs.google.com/spreadsheets/d/<THIS PART>/edit
- *  The sheet must be shared as "Anyone with the link can view". */
+ *  (needed for both A and C) */
 export const SHEET_ID = "PASTE_YOUR_SHEET_ID_HERE";
-
-/** A Google Cloud API key with the "Google Sheets API" enabled.
- *  Restrict it by HTTP referrer to wherever you host this app. */
-export const API_KEY = "PASTE_YOUR_API_KEY_HERE";
+export const API_KEY = "";
 
 /** Worksheet tabs to ignore entirely. */
 export const IGNORED_TABS = ["Precons"];

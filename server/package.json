@@ -1,0 +1,8 @@
+{
+  "name": "edh-ranker-server",
+  "private": true,
+  "description": "Optional service-account backend for the EDH Bracket Ranker",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "googleapis": "^144.0.0" }
+}

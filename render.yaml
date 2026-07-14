@@ -1,0 +1,23 @@
+# Render blueprint — deploy the EDH Bracket Ranker as a single Web Service.
+# (Or skip this file and create the service manually with the same settings.)
+#
+# After the service exists, add these in the Render dashboard:
+#   • Environment → SHEET_ID = your sheet's ID
+#   • Environment → Secret Files → add the service-account JSON as
+#       /etc/secrets/service-account.json
+#     (Secret Files keep the key out of the repo and out of plain env vars.)
+#
+# KEY_FILE below already points at that path. Render injects PORT itself.
+
+services:
+  - type: web
+    name: edh-bracket-ranker
+    runtime: node
+    plan: free
+    buildCommand: cd server && npm install
+    startCommand: node server/server.js
+    envVars:
+      - key: KEY_FILE
+        value: /etc/secrets/service-account.json
+      - key: SHEET_ID
+        sync: false # set in dashboard
