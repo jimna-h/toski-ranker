@@ -5,7 +5,7 @@
 // action, returning a small "what happens next" descriptor for the UI:
 //
 //   { type: "bracket" }                       → show the bracket screen
-//   { type: "compare", deckId, vsId, tier }   → ask "is deckId stronger than vsId?"
+//   { type: "compare", deckId, vsId, tier }   → duel: which is stronger?
 //   { type: "edgePrompt", deckId, tier, direction } → optional demote/promote offer
 //   { type: "done" }                          → everything placed
 //
@@ -122,7 +122,7 @@ function nextInfo(state) {
  * User accepted an edge-prompt move: shift the deck to the adjacent tier.
  * It's placed at the facing edge of the destination bucket (strongest slot
  * when moving down, weakest when moving up) — a heuristic, not a proof, but
- * the natural guess given it was the extreme of its old tier. The edit
+ * the natural guess given it was the extreme of its old tier. The Review
  * screen exists for the rare case where that guess is wrong.
  */
 export function acceptEdgeMove(state, deckId, fromTier, direction) {
@@ -179,7 +179,7 @@ export function removeDeck(state, deckId) {
   }
 }
 
-/** Edit screen: pull a placed/skipped deck back to the front of the queue
+/** Review screen: pull a placed/skipped deck back to the front of the queue
  *  so it gets re-ranked next. Its defer count is reset — it's had enough
  *  chances to be postponed. */
 export function rerankDeck(state, deckId) {
