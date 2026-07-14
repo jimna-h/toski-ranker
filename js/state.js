@@ -52,7 +52,7 @@ export function freshState(player, deckIds, scope = "all") {
      * A tie-group is an array of deck IDs the user judged "about the same".
      * e.g. buckets.B3_MID = [["a1"], ["b2","c3"], ["d4"]]
      * Ties as first-class groups keep scoring honest (tied decks share a
-     * score) and feed the future gradient visualization directly.
+     * score) and feed the gradient timeline directly.
      */
     buckets: {},
     /**
