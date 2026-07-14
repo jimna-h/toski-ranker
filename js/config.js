@@ -15,7 +15,7 @@ export const PLAYER_TABS = [
  *  https://docs.google.com/spreadsheets/d/<THIS PART>/edit */
 export const SHEET_ID = "1HfTUoLol3h1DmDeWTDsUqYTjq99SV9NGi-CmB3Wk89g";
 
-/** Where the "Send to James" button addresses finished rankings. */
+/** Where "Send to James" delivers finished rankings. */
 export const EXPORT_EMAIL = "jimnah.mtg@gmail.com";
 
 /** Worksheet tabs to ignore entirely. */
