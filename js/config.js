@@ -1,31 +1,20 @@
 // ---------------------------------------------------------------------------
-// config.js — edit these two values, everything else should Just Work.
+// config.js — sheet, players, and tier definitions. Everything else Just Works.
 // ---------------------------------------------------------------------------
-// Data sources — fill in ONE section:
+// Data source: link-shared Google Sheet via Google's keyless CSV endpoint.
+// The sheet must be shared "Anyone with the link can view".
 //
-// A) EASIEST — link-shared sheet, zero keys, zero Google Cloud setup:
-//    1. Share the sheet "Anyone with the link can view".
-//    2. Paste SHEET_ID below (the long ID from the sheet's URL).
-//    3. List your players' worksheet tab names here (Google's keyless
-//       endpoint can't enumerate tabs, so we tell it which ones exist —
-//       just keep this in sync if someone joins the group):
+// The endpoint can't enumerate worksheet tabs, so list your players' tab
+// names here — keep it in sync if someone joins or renames their tab
+// (names must match Google exactly, including spaces):
 export const PLAYER_TABS = [
-  // "Sam", "Dave", "Alex",
   "James", "Ben R", "Kevin", "Michael R", "Michael J", "Will", "Ben M"
 ];
-// B) DATA_URL: any endpoint returning { sheets: [{ title, values }] }.
-//    For private sheets. Providers included: server/server.js (Node +
-//    service account) and apps-script/Code.gs (Apps Script proxy).
-//    Takes priority over A and C when non-empty.
-export const DATA_URL = "";
-// C) Link-shared sheet + Google Cloud API key. Auto-discovers tabs, so no
-//    PLAYER_TABS list to maintain, at the cost of API-key setup. Used when
-//    API_KEY is filled in and PLAYER_TABS is empty.
+
 /** The long ID from your Google Sheet URL:
- *  https://docs.google.com/spreadsheets/d/<THIS PART>/edit
- *  (needed for both A and C) */
+ *  https://docs.google.com/spreadsheets/d/<THIS PART>/edit */
 export const SHEET_ID = "1HfTUoLol3h1DmDeWTDsUqYTjq99SV9NGi-CmB3Wk89g";
-export const API_KEY = "";
+
 /** Worksheet tabs to ignore entirely. */
 export const IGNORED_TABS = ["Precons"];
 /** Deck names to ignore (exact match, case-insensitive). */

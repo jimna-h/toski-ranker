@@ -146,7 +146,7 @@ export class UI {
       "div",
       attrs,
       this.artBanner(d, small),
-      el("div", { class: "eyebrow" }, eyebrow),
+      ...(eyebrow ? [el("div", { class: "eyebrow" }, eyebrow)] : []),
       el("h2", { class: "deck-name" }, d.deckName),
       el("div", { class: "deck-owner" }, `${d.owner}'s deck`),
       ...(tierId
@@ -170,7 +170,7 @@ export class UI {
         el("div", { class: "error" },
           el("strong", {}, "Couldn't load the deck list."),
           el("p", {}, message),
-          el("p", {}, "Check SHEET_ID and API_KEY in js/config.js, and that the sheet is shared as “anyone with the link can view.”"),
+          el("p", {}, "Check SHEET_ID and PLAYER_TABS in js/config.js, and that the sheet is shared as “anyone with the link can view.”"),
           el("button", { onclick: () => location.reload() }, "Try again")
         )
       )
@@ -205,22 +205,18 @@ export class UI {
   renderBracket(deckId) {
     this.clear();
     this.root.append(...this.topbar());
-    this.root.append(this.deckCard(deckId, { eyebrow: "Which bracket?" }));
+    this.root.append(this.deckCard(deckId, { eyebrow: null }));
 
-    const btn = (tier) => {
-      const groups = this.session.state.buckets[tier.id] ?? [];
-      const n = groups.reduce((s, g) => s + g.length, 0);
-      return el(
+    const btn = (tier) =>
+      el(
         "button",
         {
           class: "bracket-btn",
           style: `--tint:${TIER_TINT[tier.id]}`,
           onclick: () => this.h.onBracket(tier.id),
         },
-        tier.label,
-        el("span", { class: "count" }, n ? `${n} placed` : "empty")
+        tier.label
       );
-    };
 
     // Rows mirror the bracket structure: 1 / 3 / 3 / 3 / 1
     const rows = [[0], [1, 2, 3], [4, 5, 6], [7, 8, 9], [10]];
