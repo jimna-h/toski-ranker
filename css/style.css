@@ -338,7 +338,27 @@ button:disabled { opacity: 0.4; cursor: default; }
   color: var(--parchment);
   margin-bottom: 1rem;
 }
+.scope-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+.scope-btn { padding: 0.6rem 0.3rem; font-size: 0.88rem; color: var(--parchment-dim); }
+.scope-btn.active {
+  color: var(--parchment);
+  border-color: var(--focus);
+  font-weight: 600;
+}
+
 .start .go { width: 100%; padding: 0.9rem; font-weight: 600; }
+.ghost-wide {
+  width: 100%;
+  margin-top: 0.6rem;
+  background: transparent;
+  color: var(--parchment-dim);
+}
+.start .notice { margin-top: 0.8rem; text-align: left; }
 
 .summary-list { list-style: none; padding: 0; margin: 1rem 0; }
 .summary-list li {

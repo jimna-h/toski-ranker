@@ -177,26 +177,79 @@ export class UI {
     );
   }
 
-  /** Player picker. `resumeInfo(player)` → "12/70" string or null. */
-  renderStart(players, resumeInfo) {
+  /** Player picker + scope choice. `sessionInfo(player)` returns
+   *  { progress: "12/70", scope: "mine" } for a saved session, or null. */
+  renderStart(players, sessionInfo) {
     this.clear();
     const select = el("select", {},
       el("option", { value: "" }, "Choose your name…"),
       ...players.map((p) => el("option", { value: p }, p))
     );
+
+    // Scope: which decks this session rates. "All decks" is the default;
+    // a resumed session keeps its saved scope (switching would prune work),
+    // so the choice locks while a session exists — Start over unlocks it.
+    const SCOPES = [["all", "All decks"], ["mine", "My decks"], ["others", "Not my decks"]];
+    let scope = "all";
+    let locked = false;
+    const scopeRow = el("div", { class: "scope-row" });
+    const paintScopes = () => {
+      scopeRow.replaceChildren(
+        ...SCOPES.map(([value, label]) =>
+          el("button", {
+            class: `scope-btn${scope === value ? " active" : ""}`,
+            disabled: locked,
+            onclick: () => { scope = value; paintScopes(); },
+          }, label)
+        )
+      );
+    };
+
     const go = el("button", { class: "go", disabled: true }, "Start ranking");
-    select.addEventListener("change", () => {
-      const info = select.value ? resumeInfo(select.value) : null;
-      go.disabled = !select.value;
-      go.textContent = info ? `Resume (${info} placed)` : "Start ranking";
-    });
-    go.addEventListener("click", () => this.h.onStart(select.value));
+    const restartArea = el("div", {});
+
+    /** Repaint scope / go / restart for the currently selected player. */
+    const refresh = () => {
+      const player = select.value;
+      const info = player ? sessionInfo(player) : null;
+      go.disabled = !player;
+      locked = !!info;
+      if (info) scope = info.scope;
+      paintScopes();
+      go.textContent = info ? `Resume (${info.progress} placed)` : "Start ranking";
+
+      restartArea.replaceChildren();
+      if (info) {
+        // Two-step restart: the destructive action always hides behind an
+        // explicit confirmation that names what will be lost.
+        const restartBtn = el("button", { class: "ghost-wide" }, "Start over from scratch");
+        restartBtn.addEventListener("click", () => {
+          restartArea.replaceChildren(
+            el("div", { class: "notice" },
+              el("strong", {}, `Erase ${player}'s progress?`),
+              el("p", {}, `This permanently deletes the ${info.progress} decks placed so far on this device. Are you sure?`),
+              el("div", { class: "actions" },
+                el("button", { onclick: () => { this.h.onResetSession(player); refresh(); } }, "Yes, start over"),
+                el("button", { onclick: refresh }, "Cancel")
+              )
+            )
+          );
+        });
+        restartArea.append(restartBtn);
+      }
+    };
+    paintScopes();
+    select.addEventListener("change", refresh);
+    go.addEventListener("click", () => this.h.onStart(select.value, scope));
+
     this.root.append(
       el("div", { class: "start" },
         el("h1", {}, "EDH Bracket Ranker"),
         el("p", { class: "sub" }, "Every deck, one at a time. Pick a bracket, answer a couple of comparisons, done. Progress saves automatically — close the tab whenever."),
         select,
-        go
+        scopeRow,
+        go,
+        restartArea
       )
     );
   }

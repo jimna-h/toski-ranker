@@ -32,10 +32,13 @@ function shuffle(arr) {
   return arr;
 }
 
-export function freshState(player, deckIds) {
+export function freshState(player, deckIds, scope = "all") {
   return {
     version: SCHEMA_VERSION,
     player,
+    /** Which decks this session rates: "all" | "mine" | "others".
+     *  Fixed for the session's lifetime; reconciliation filters by it. */
+    scope,
     /** Deck IDs not yet placed, in presentation order. Front = current. */
     queue: shuffle([...deckIds]),
     /** "Come back later" decks, re-queued after the main queue empties. */
@@ -80,10 +83,15 @@ export class Session {
     }
   }
 
-  static start(player, deckIds) {
-    const session = new Session(freshState(player, deckIds));
+  static start(player, deckIds, scope = "all") {
+    const session = new Session(freshState(player, deckIds, scope));
     session.commit();
     return session;
+  }
+
+  /** Permanently delete a player's saved session (used by "start over"). */
+  static clear(player) {
+    localStorage.removeItem(storageKey(player));
   }
 
   /** Call before mutating state, so the action can be undone. */

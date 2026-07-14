@@ -21,7 +21,7 @@ let players = [];
 const ui = new UI(document.getElementById("app"), {
   onStart, onBracket, onAnswer, onDefer, onSkip,
   onUndo, onEdgeMove, onRerank, onExport, onOpenEdit, onCloseEdit,
-  onResolvePlace,
+  onResolvePlace, onResetSession,
 });
 
 /** Route a ranking-engine step descriptor to the right screen. */
@@ -42,12 +42,25 @@ function proceed() {
 
 /* ---- handlers ------------------------------------------------------------ */
 
-function onStart(player) {
+/** Deck IDs visible to a session, per its scope. Owner matching uses the
+ *  worksheet tab name, which is also the player name in the dropdown. */
+function scopedIds(player, scope) {
+  const ids = catalog.allIds();
+  if (scope === "mine") return ids.filter((id) => catalog.get(id).owner === player);
+  if (scope === "others") return ids.filter((id) => catalog.get(id).owner !== player);
+  return ids;
+}
+
+function onStart(player, scope) {
   const existing = Session.load(player);
   if (existing) {
+    // A saved session keeps its original scope — switching scope mid-run
+    // would silently prune already-ranked decks, so we don't allow it.
+    const savedScope = existing.state.scope ?? "all";
     // The sheet may have changed since this session was saved: sync the
-    // saved state with the fresh catalog before resuming.
-    const { added, removed } = reconcileWithCatalog(existing.state, catalog.allIds());
+    // saved state with the fresh catalog (scoped) before resuming.
+    const { added, removed } = reconcileWithCatalog(
+      existing.state, scopedIds(player, savedScope));
     if (added || removed) {
       const bits = [];
       if (added) bits.push(`${added} new deck${added === 1 ? "" : "s"} added to your queue`);
@@ -57,7 +70,7 @@ function onStart(player) {
     existing.commit();
     session = existing;
   } else {
-    session = Session.start(player, catalog.allIds());
+    session = Session.start(player, scopedIds(player, scope), scope);
   }
   ui.session = session;
   proceed();
@@ -130,6 +143,12 @@ function onRerank(deckId) {
   proceed();
 }
 
+/** "Start over" (confirmed in the UI): erase the saved session so the
+ *  player can begin fresh, possibly with a different scope. */
+function onResetSession(player) {
+  Session.clear(player);
+}
+
 function onExport() {
   downloadCsv(session.state, catalog);
 }
@@ -157,7 +176,12 @@ async function boot() {
     }
     ui.renderStart(players, (player) => {
       const existing = Session.load(player);
-      return existing ? `${existing.placedCount()}/${existing.totalCount()}` : null;
+      return existing
+        ? {
+            progress: `${existing.placedCount()}/${existing.totalCount()}`,
+            scope: existing.state.scope ?? "all",
+          }
+        : null;
     });
   } catch (err) {
     ui.renderError(err.message);

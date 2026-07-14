@@ -31,10 +31,10 @@ export function buildCsv(state, catalog) {
     })
     .sort((a, b) => a.rating - b.rating);
 
-  const lines = ["DeckID,DeckName,Owner,Bracket,NumericRating"];
+  const lines = ["DeckID,DeckName,Owner,Rater,Bracket,NumericRating"];
   for (const r of rows) {
     lines.push(
-      [r.deckId, csvField(r.name), csvField(r.owner), r.bracket, r.rating].join(",")
+      [r.deckId, csvField(r.name), csvField(r.owner), csvField(state.player), r.bracket, r.rating].join(",")
     );
   }
   return lines.join("\r\n");

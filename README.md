@@ -37,8 +37,13 @@ decimal ratings.
 - Progress is saved per player per browser. Clearing site data erases it.
 - Deck IDs are FNV-1a hashes of `owner + deckName`, so they stay stable
   across sessions and users as long as neither changes.
-- CSV columns: `DeckID,DeckName,Owner,Bracket,NumericRating`. Skipped decks
-  are excluded (restorable from the Review screen before export).
+- CSV columns: `DeckID,DeckName,Owner,Rater,Bracket,NumericRating` —
+  `Rater` is the player who produced the rankings, so exported files from
+  the whole group can be concatenated directly. Skipped decks are excluded
+  (restorable from the Review screen before export).
+- After picking their name, each player chooses a scope: **All decks**
+  (default), **My decks**, or **Not my decks**. A saved session keeps its
+  original scope — switching mid-run would prune already-ranked decks.
 
 ## Architecture
 
