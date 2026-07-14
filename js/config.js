@@ -12,6 +12,7 @@
 //       just keep this in sync if someone joins the group):
 export const PLAYER_TABS = [
   // "Sam", "Dave", "Alex",
+  "James", "Ben R", "Kevin", "Michael R", "Michael J", "Will", "Ben M"
 ];
 
 // B) DATA_URL: any endpoint returning { sheets: [{ title, values }] }.
@@ -26,7 +27,7 @@ export const DATA_URL = "";
 /** The long ID from your Google Sheet URL:
  *  https://docs.google.com/spreadsheets/d/<THIS PART>/edit
  *  (needed for both A and C) */
-export const SHEET_ID = "PASTE_YOUR_SHEET_ID_HERE";
+export const SHEET_ID = "1HfTUoLol3h1DmDeWTDsUqYTjq99SV9NGi-CmB3Wk89g";
 export const API_KEY = "";
 
 /** Worksheet tabs to ignore entirely. */
