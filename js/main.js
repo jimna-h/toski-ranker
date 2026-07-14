@@ -11,7 +11,7 @@ import {
   nextStep, chooseBracket, answerComparison, deferCurrent,
   skipCurrent, acceptEdgeMove, rerankDeck, reconcileWithCatalog,
 } from "./ranking.js";
-import { downloadCsv } from "./exportCsv.js";
+import { downloadCsv, emailCsv, copyForSheet } from "./exportCsv.js";
 import { UI } from "./ui.js";
 
 let catalog = null;
@@ -21,7 +21,7 @@ let players = [];
 const ui = new UI(document.getElementById("app"), {
   onStart, onBracket, onAnswer, onDefer, onSkip,
   onUndo, onEdgeMove, onRerank, onExport, onOpenEdit, onCloseEdit,
-  onResolvePlace, onResetSession,
+  onResolvePlace, onResetSession, onEmail, onCopy,
 });
 
 /** Route a ranking-engine step descriptor to the right screen. */
@@ -151,6 +151,14 @@ function onResetSession(player) {
 
 function onExport() {
   downloadCsv(session.state, catalog);
+}
+
+function onEmail() {
+  emailCsv(session.state, catalog);
+}
+
+function onCopy() {
+  return copyForSheet(session.state, catalog); // promise: UI shows Copied!/failed
 }
 
 function onOpenEdit() {

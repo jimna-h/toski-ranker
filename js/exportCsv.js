@@ -1,12 +1,37 @@
 // ---------------------------------------------------------------------------
-// exportCsv.js — assembles and downloads the results CSV.
-// Columns: DeckID,DeckName,Owner,Bracket,NumericRating
-// Skipped decks are excluded. Rows are sorted by rating (strongest last)
-// so the file is human-readable before any spreadsheet work.
+// exportCsv.js — assembles the results and gets them to James.
+// Three paths, all from the same row builder:
+//   • downloadCsv  — classic file download
+//   • emailCsv     — mailto: with the CSV preloaded in the body
+//   • copyForSheet — TSV to the clipboard (pastes into Sheets as columns)
+// Columns: DeckID,DeckName,Owner,Rater,Bracket,NumericRating
+// Skipped decks are excluded. Rows sorted by rating (strongest last).
 // ---------------------------------------------------------------------------
 
 import { computeScores } from "./scoring.js";
-import { tierById } from "./config.js";
+import { tierById, EXPORT_EMAIL } from "./config.js";
+
+const HEADER = ["DeckID", "DeckName", "Owner", "Rater", "Bracket", "NumericRating"];
+
+/** The shared row model every export format is built from. */
+function csvRows(state, catalog) {
+  const scores = computeScores(state.buckets);
+  return [...scores.entries()]
+    .map(([deckId, { score, tierId }]) => {
+      const deck = catalog.get(deckId);
+      return {
+        deckId,
+        name: deck?.deckName ?? "(unknown)",
+        owner: deck?.owner ?? "(unknown)",
+        rater: state.player,
+        bracket: tierById[tierId].label,
+        // 3 decimals: enough precision that dense tiers don't collide when
+        // rounded, without implying false accuracy.
+        rating: score.toFixed(3),
+      };
+    })
+    .sort((a, b) => a.rating - b.rating);
+}
 
 /** RFC-4180-ish escaping: quote any field containing comma/quote/newline. */
 function csvField(value) {
@@ -15,26 +40,10 @@ function csvField(value) {
 }
 
 export function buildCsv(state, catalog) {
-  const scores = computeScores(state.buckets);
-  const rows = [...scores.entries()]
-    .map(([deckId, { score, tierId }]) => {
-      const deck = catalog.get(deckId);
-      return {
-        deckId,
-        name: deck?.deckName ?? "(unknown)",
-        owner: deck?.owner ?? "(unknown)",
-        bracket: tierById[tierId].label,
-        // 3 decimals: enough precision that dense tiers don't collide when
-        // rounded, without implying false accuracy.
-        rating: score.toFixed(3),
-      };
-    })
-    .sort((a, b) => a.rating - b.rating);
-
-  const lines = ["DeckID,DeckName,Owner,Rater,Bracket,NumericRating"];
-  for (const r of rows) {
+  const lines = [HEADER.join(",")];
+  for (const r of csvRows(state, catalog)) {
     lines.push(
-      [r.deckId, csvField(r.name), csvField(r.owner), csvField(state.player), r.bracket, r.rating].join(",")
+      [r.deckId, csvField(r.name), csvField(r.owner), csvField(r.rater), r.bracket, r.rating].join(",")
     );
   }
   return lines.join("\r\n");
@@ -51,4 +60,33 @@ export function downloadCsv(state, catalog) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+/** TSV to the clipboard — pasting into Google Sheets splits into columns,
+ *  so "Copy for spreadsheet" → Ctrl+V lands ready-made in the aggregation
+ *  sheet. (Tabs never appear in the data, so no escaping needed.) */
+export async function copyForSheet(state, catalog) {
+  const lines = [HEADER.join("\t")];
+  for (const r of csvRows(state, catalog)) {
+    lines.push([r.deckId, r.name, r.owner, r.rater, r.bracket, r.rating].join("\t"));
+  }
+  await navigator.clipboard.writeText(lines.join("\n"));
+}
+
+/** Opens the user's mail app with the CSV preloaded in the body.
+ *  mailto: can't attach files and some clients truncate very long bodies,
+ *  so this also triggers the file download first — the body opens with a
+ *  note to attach that file if the pasted data looks cut off. A truncated
+ *  email should never be able to silently corrupt the aggregate. */
+export function emailCsv(state, catalog) {
+  downloadCsv(state, catalog); // the reliable copy
+  const subject = `EDH Rankings — ${state.player}`;
+  const body =
+    `Rankings from ${state.player}. Paste-ready CSV below.\n` +
+    `(A CSV file was also downloaded — if the data below looks cut off, attach that file instead.)\n\n` +
+    buildCsv(state, catalog);
+  location.href =
+    `mailto:${EXPORT_EMAIL}` +
+    `?subject=${encodeURIComponent(subject)}` +
+    `&body=${encodeURIComponent(body)}`;
 }

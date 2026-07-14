@@ -509,7 +509,13 @@ export class UI {
     const canvas = this.root.querySelector(".dock-canvas");
     if (!canvas || !this._dockEntries) return;
     const W = canvas.clientWidth;
-    const THUMB = W < 480 ? 26 : 34; // smaller thumbs on phones
+    // Thumbnail size scales with crowding: with few decks (or a wide
+    // screen) thumbs sit at full size; as average px-per-deck shrinks, so
+    // do the thumbs — down to a floor that stays recognizable & tappable.
+    const base = W < 480 ? 28 : 36;
+    const n = this._dockEntries.length;
+    const density = n > 0 ? W / n : Infinity; // px of axis per deck
+    const THUMB = Math.round(Math.max(18, Math.min(base, density * 1.6)));
     const LANE = Math.round(THUMB * 0.76); // vertical step (slight shingle)
     const MAX_LANES = 5;
 
@@ -571,29 +577,66 @@ export class UI {
     return el("span", { class: "dock-thumb placeholder" }, initials);
   }
 
-  /** All decks handled: summary + export. */
+  /** All decks handled: a visual recap of every placement — each bracket's
+   *  decks shown as art cards in ranked order (strongest first), tied decks
+   *  clustered — plus the three ways to get the data to James. */
   renderDone() {
     this.clear();
     this.root.append(...this.topbar(false));
     const s = this.session.state;
-    const list = el("ul", { class: "summary-list" });
-    for (const tier of TIERS) {
-      const n = (s.buckets[tier.id] ?? []).reduce((sum, g) => sum + g.length, 0);
-      if (!n) continue;
-      list.append(
-        el("li", { style: `--tint:${TIER_TINT[tier.id]}` },
-          el("span", {}, tier.label), el("span", {}, `${n} deck${n === 1 ? "" : "s"}`))
-      );
+
+    const gallery = el("div", { class: "gallery" });
+    // Strongest tier first — that's how players brag about lists.
+    for (const tier of [...TIERS].reverse()) {
+      const groups = s.buckets[tier.id];
+      if (!groups?.length) continue;
+      const section = el("div", { class: "gallery-tier", style: `--tint:${TIER_TINT[tier.id]}` },
+        el("h2", {}, tier.label));
+      const rowEl = el("div", { class: "gallery-row" });
+      // Groups strongest → weakest within the tier; a multi-deck group is a
+      // tie and renders as one visually joined cluster.
+      for (const group of [...groups].reverse()) {
+        const cluster = el("div", { class: `gallery-cluster${group.length > 1 ? " tied" : ""}` });
+        for (const id of group) {
+          const d = this.deck(id);
+          cluster.append(
+            el("figure", { class: "gallery-deck" },
+              d.artUrl
+                ? el("img", { src: d.artUrl, alt: "", loading: "lazy",
+                    onerror: (e) => { e.target.replaceWith(this._placeholderThumb({ name: d.deckName })); } })
+                : this._placeholderThumb({ name: d.deckName }),
+              el("figcaption", {}, d.deckName)
+            )
+          );
+        }
+        rowEl.append(cluster);
+      }
+      section.append(rowEl);
+      gallery.append(section);
     }
+
+    const copyBtn = el("button", {}, "Copy for spreadsheet");
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await this.h.onCopy();
+        copyBtn.textContent = "Copied!";
+        setTimeout(() => { copyBtn.textContent = "Copy for spreadsheet"; }, 1800);
+      } catch {
+        copyBtn.textContent = "Copy failed — use Download";
+      }
+    });
+
     this.root.append(
       el("div", {},
         el("h1", {}, "All decks placed."),
-        list,
+        gallery,
         s.skipped.length
           ? el("p", { class: "sub" }, `${s.skipped.length} skipped (not in the export — restore them from Review).`)
           : "",
-        el("div", { class: "secondary-row" },
-          el("button", { onclick: () => this.h.onExport(), style: "font-weight:600" }, "Download CSV"),
+        el("div", { class: "secondary-row export-row" },
+          el("button", { onclick: () => this.h.onEmail(), class: "primary" }, "Send to James"),
+          el("button", { onclick: () => this.h.onExport() }, "Download CSV"),
+          copyBtn,
           el("button", { onclick: () => this.h.onOpenEdit() }, "Review placements")
         )
       ),
