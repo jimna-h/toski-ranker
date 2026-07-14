@@ -132,7 +132,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 /* ---- commander art -------------------------------------------------------- */
 
 .deck-art {
-  margin: -1.1rem -1.2rem 0.8rem; /* bleed to the card edges */
+  margin: -1.1rem -1.2rem 0.9rem; /* bleed to the card edges */
   border-radius: var(--radius) var(--radius) 0 0;
   overflow: hidden;
   display: grid;
@@ -142,8 +142,8 @@ button:disabled { opacity: 0.4; cursor: default; }
 .deck-art img {
   width: 100%;
   height: auto;
-  aspect-ratio: 626 / 457;  /* Scryfall art-crop proportions — shows the full art */
-  max-height: 12rem;         /* compactness cap; slight crop only when this bites */
+  aspect-ratio: 3/2;  /* Scryfall art-crop proportions — shows the full art */
+  object-position: center 25%;         /* compactness cap; slight crop only when this bites */
   object-fit: cover;
   display: block;
 }
