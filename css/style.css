@@ -1,10 +1,10 @@
 /* ---------------------------------------------------------------------------
-   EDH Bracket Ranker — visual system
+   Toski Ranker — visual system
    Concept: a playmat. Deep desaturated slate (table felt), warm parchment
    text (card stock), and ONE signature device: every bracket surface is
    tinted along a continuous jade → amber → ember gradient that encodes the
    casual → cEDH power axis. Color is information here, not decoration —
-   the same gradient will later drive the aggregate visualization.
+   the same gradient drives the timeline dock.
    Type: Spectral (bookish serif, kin to card rules text) for deck names;
    system sans for UI chrome.
 --------------------------------------------------------------------------- */
@@ -78,8 +78,18 @@ button:disabled { opacity: 0.4; cursor: default; }
   font-size: 0.82rem;
   color: var(--parchment-dim);
 }
-.topbar .title { font-family: var(--serif); font-size: 1rem; color: var(--parchment); }
+.topbar .title {
+  font-family: var(--serif);
+  font-size: 1rem;
+  color: var(--parchment);
+  background: transparent;
+  border: none;
+  padding: 0.2rem 0;
+  cursor: pointer;
+}
+.topbar .title:hover { color: var(--focus); filter: none; }
 .topbar button { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+.topbar .title { padding: 0.2rem 0; }
 
 .progress-track {
   height: 4px;
@@ -119,6 +129,50 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .deck-owner { color: var(--parchment-dim); margin-top: 0.35rem; font-size: 0.9rem; }
 
+/* ---- commander art -------------------------------------------------------- */
+
+.deck-art {
+  margin: -1.1rem -1.2rem 0.8rem; /* bleed to the card edges */
+  border-radius: var(--radius) var(--radius) 0 0;
+  overflow: hidden;
+  display: grid;
+  background: var(--felt);
+}
+.deck-art img {
+  width: 100%;
+  height: 7.5rem;
+  object-fit: cover;
+  display: block;
+}
+.deck-art.partners { grid-template-columns: 1fr 1fr; gap: 2px; }
+.deck-art.small { margin: -0.9rem -1rem 0.7rem; }
+.deck-art.small img { height: 5.5rem; }
+
+/* ---- links & chips -------------------------------------------------------- */
+
+.decklist-link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: var(--parchment-dim);
+  text-decoration: none;
+}
+.decklist-link:hover { color: var(--parchment); border-color: var(--focus); }
+.dock-info .decklist-link { margin-top: 0; flex: none; }
+
+.tier-chip {
+  display: inline-block;
+  margin-top: 0.4rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 0.75rem;
+  color: var(--parchment-dim);
+}
+
 /* ---- bracket grid: the signature ---------------------------------------
    Rows mirror the bracket structure (1 / 3 / 3 / 3 / 1); each button's left
    edge carries its position on the power gradient. -------------------------*/
@@ -154,8 +208,15 @@ button:disabled { opacity: 0.4; cursor: default; }
   background: transparent;
   color: var(--parchment-dim);
 }
+.export-row { flex-wrap: wrap; }
+.export-row .primary {
+  background: var(--felt-raised);
+  color: var(--parchment);
+  border-color: var(--focus);
+  font-weight: 600;
+}
 
-/* ---- comparison screen -------------------------------------------------- */
+/* ---- comparison duel ------------------------------------------------------ */
 
 .vs-label {
   text-align: center;
@@ -165,28 +226,6 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .deck-card.vs { padding: 0.9rem 1rem; }
 .deck-card.vs .deck-name { font-size: 1.25rem; }
-.decklist-link {
-  display: inline-block;
-  margin-top: 0.5rem;
-  padding: 0.25rem 0.7rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font-size: 0.78rem;
-  color: var(--parchment-dim);
-  text-decoration: none;
-}
-.decklist-link:hover { color: var(--parchment); border-color: var(--focus); }
-.dock-info .decklist-link { margin-top: 0; flex: none; }
-
-.tier-chip {
-  display: inline-block;
-  margin-top: 0.4rem;
-  padding: 0.1rem 0.55rem;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  font-size: 0.75rem;
-  color: var(--parchment-dim);
-}
 
 .duel {
   display: grid;
@@ -207,25 +246,6 @@ button:disabled { opacity: 0.4; cursor: default; }
 .answer-row.single { grid-template-columns: 1fr; }
 .answer-row button { padding: 0.8rem 0.4rem; font-weight: 600; }
 .answer-row .same { background: transparent; }
-
-/* ---- commander art -------------------------------------------------------- */
-
-.deck-art {
-  margin: -1.1rem -1.2rem 0.8rem; /* bleed to the card edges */
-  border-radius: var(--radius) var(--radius) 0 0;
-  overflow: hidden;
-  display: grid;
-  background: var(--felt);
-}
-.deck-art img {
-  width: 100%;
-  height: 7.5rem;
-  object-fit: cover;
-  display: block;
-}
-.deck-art.partners { grid-template-columns: 1fr 1fr; gap: 2px; }
-.deck-art.small { margin: -0.9rem -1rem 0.7rem; }
-.deck-art.small img { height: 5.5rem; }
 
 /* ---- the Dock: always-visible power timeline ------------------------------
    Fixed to the bottom edge. The axis gradient runs weak (jade, left) →
@@ -259,12 +279,17 @@ button:disabled { opacity: 0.4; cursor: default; }
   border: 1px solid var(--line);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45);
   background: var(--felt-raised);
-  cursor: default;
+  cursor: pointer;
   transition: transform 100ms ease;
 }
 .dock-thumb:hover {
   transform: scale(1.9);
   z-index: 99 !important; /* hovered thumb above every stack level */
+}
+.dock-thumb.selected {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+  z-index: 98 !important;
 }
 .dock-thumb.placeholder {
   display: inline-flex;
@@ -274,6 +299,19 @@ button:disabled { opacity: 0.4; cursor: default; }
   font-weight: 600;
   color: var(--parchment-dim);
 }
+
+.dock-info-slot { min-height: 0; }
+.dock-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.4rem 0.45rem;
+  font-size: 0.85rem;
+}
+.dock-info-name { flex: 1; font-family: var(--serif); line-height: 1.15; }
+.dock-info-name .who { font-family: var(--sans); color: var(--parchment-dim); font-size: 0.75rem; }
+.dock-info button { padding: 0.25rem 0.7rem; font-size: 0.8rem; }
+.dock-info button.ghost { background: transparent; border-color: transparent; color: var(--parchment-dim); }
 
 .dock-axis {
   position: relative;
@@ -300,25 +338,6 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .dock-labels span { flex: 1; text-align: center; }
 
-.dock-info-slot { min-height: 0; }
-.dock-info {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.3rem 0.4rem 0.45rem;
-  font-size: 0.85rem;
-}
-.dock-info-name { flex: 1; font-family: var(--serif); line-height: 1.15; }
-.dock-info-name .who { font-family: var(--sans); color: var(--parchment-dim); font-size: 0.75rem; }
-.dock-info button { padding: 0.25rem 0.7rem; font-size: 0.8rem; }
-.dock-info button.ghost { background: transparent; border-color: transparent; color: var(--parchment-dim); }
-
-.dock-thumb.selected {
-  outline: 2px solid var(--focus);
-  outline-offset: 1px;
-  z-index: 98 !important;
-}
-
 /* Content must never hide behind the fixed dock (dock height is capped). */
 #app { padding-bottom: 11rem; }
 
@@ -337,7 +356,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .notice .actions { display: flex; gap: 0.5rem; margin-top: 0.9rem; flex-wrap: wrap; }
 
-/* ---- start / done ------------------------------------------------------- */
+/* ---- start screen --------------------------------------------------------- */
 
 .start h1 { font-size: 2rem; margin: 2.2rem 0 0.3rem; }
 .start .sub { color: var(--parchment-dim); margin-bottom: 2rem; }
@@ -363,7 +382,6 @@ button:disabled { opacity: 0.4; cursor: default; }
   border-color: var(--focus);
   font-weight: 600;
 }
-
 .start .go { width: 100%; padding: 0.9rem; font-weight: 600; }
 .ghost-wide {
   width: 100%;
@@ -373,66 +391,59 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .start .notice { margin-top: 0.8rem; text-align: left; }
 
-/* Done-screen gallery: placements rebuilt visually, tier by tier. */
+/* ---- done-screen gallery: placements rebuilt visually, tier by tier ------ */
+
 .gallery { margin: 0.8rem 0 0.4rem; }
 .gallery-tier { margin-bottom: 0.9rem; }
 .gallery-tier h2 {
-  font-size: 0.95rem;
-  margin: 0 0 0.4rem;
-  padding-left: 0.55rem;
+  font-size: 1rem;
+  margin: 0 0 0.45rem;
+  padding-left: 0.6rem;
   border-left: 4px solid var(--tint, var(--line));
 }
 .gallery-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-start; }
 .gallery-cluster { display: flex; gap: 2px; }
 .gallery-cluster.tied {
-  border: 1px dashed var(--parchment-dim);
-  border-radius: 8px;
-  padding: 2px;
   position: relative;
+  border: 1px dashed var(--focus);
+  border-radius: 8px;
+  padding: 3px;
 }
 .gallery-cluster.tied::after {
   content: "tied";
   position: absolute;
   top: -0.55rem;
   right: 0.3rem;
-  font-size: 0.58rem;
+  background: var(--felt);
+  padding: 0 0.3rem;
+  font-size: 0.6rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--parchment-dim);
-  background: var(--felt);
-  padding: 0 0.25rem;
 }
 .gallery-deck { margin: 0; width: 62px; }
 .gallery-deck img, .gallery-deck .dock-thumb.placeholder {
   width: 62px;
-  height: 44px;
+  height: 46px;
   object-fit: cover;
   border-radius: 6px;
   border: 1px solid var(--line);
-  display: flex;
+  display: block;
   position: static;
 }
 .gallery-deck figcaption {
   font-size: 0.62rem;
   line-height: 1.15;
   color: var(--parchment-dim);
-  margin-top: 2px;
+  margin-top: 0.2rem;
   overflow: hidden;
+  text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
 
-.export-row { flex-wrap: wrap; }
-.export-row button { flex: 1 1 45%; }
-.export-row .primary {
-  background: var(--felt-raised);
-  border-color: var(--focus);
-  color: var(--parchment);
-  font-weight: 600;
-}
-
-/* ---- edit screen -------------------------------------------------------- */
+/* ---- review/edit screen --------------------------------------------------- */
 
 .edit-tier { margin-bottom: 1.1rem; }
 .edit-tier h2 {
@@ -465,8 +476,10 @@ button:disabled { opacity: 0.4; cursor: default; }
   line-height: 1.5;
 }
 
+/* ---- phone-size compaction ------------------------------------------------ */
+
 @media (max-width: 480px) {
-  .topbar .title { display: none; } /* player + progress matter more */
+  .topbar .title { font-size: 0.9rem; }
   .topbar { padding-bottom: 0.6rem; }
   .deck-name { font-size: 1.35rem; }
   .deck-art img { height: 6rem; }
