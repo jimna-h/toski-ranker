@@ -138,12 +138,17 @@ button:disabled { opacity: 0.4; cursor: default; }
   display: grid;
   background: var(--felt);
 }
+
 .deck-art img {
   width: 100%;
-  height: 8.5rem;
+  height: auto;
+  aspect-ratio: 626 / 457;  /* Scryfall art-crop proportions — shows the full art */
+  max-height: 12rem;         /* compactness cap; slight crop only when this bites */
   object-fit: cover;
   display: block;
 }
+.deck-art.partners img { aspect-ratio: auto; height: 5.5rem; }
+
 .deck-art.partners { grid-template-columns: 1fr 1fr; gap: 2px; }
 .deck-art.small { margin: -0.9rem -1rem 0.7rem; }
 .deck-art.small img { height: 5.5rem; }
