@@ -12,7 +12,7 @@
 //       just keep this in sync if someone joins the group):
 export const PLAYER_TABS = [
   // "Sam", "Dave", "Alex",
-  "James", "Ben R", "Kevin", "MJichael R", "Michael J", "Will", "Ben M"
+  "James", "Ben R", "Kevin", "Michael R", "Michael J", "Will", "Ben M"
 ];
 
 // B) DATA_URL: any endpoint returning { sheets: [{ title, values }] }.
