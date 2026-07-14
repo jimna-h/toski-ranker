@@ -11,8 +11,8 @@ import { computeScores } from "./scoring.js";
 
 /* ---- power-gradient tints -------------------------------------------------
    Each of the 11 tiers gets a color sampled from the jade→amber→ember axis.
-   Computed once here (rather than 11 hand-picked hexes) so the future
-   continuous-scale visualization can reuse the exact same function. */
+   Computed once here (rather than 11 hand-picked hexes) so the timeline and
+   any future aggregate view use the exact same function. */
 
 const ANCHORS = ["#3e8e6e", "#6d9a58", "#b3913f", "#c1663c", "#b8403d"];
 
@@ -51,16 +51,15 @@ function el(tag, attrs = {}, ...children) {
 export class UI {
   /**
    * @param {HTMLElement} root
-   * @param {object} handlers callbacks provided by main.js:
-   *   onStart(player), onBracket(tierId), onAnswer(answer), onDefer(),
-   *   onSkip(), onUndo(), onEdgeMove(deckId, tier, direction, accept),
-   *   onRerank(deckId), onExport(), onOpenEdit(), onCloseEdit()
+   * @param {object} handlers callbacks provided by main.js.
    */
   constructor(root, handlers) {
     this.root = root;
     this.h = handlers;
     this.catalog = null;
     this.session = null;
+    /** One-shot notice (e.g. "sheet changed") set by main.js. */
+    this.flash = null;
     // The dock positions thumbnails in pixels, so it must relayout when the
     // viewport changes (rotation, window resize).
     window.addEventListener("resize", () => this._layoutDock());
@@ -82,7 +81,7 @@ export class UI {
     const bar = el(
       "div",
       { class: "topbar" },
-      el("span", { class: "title" }, "EDH Bracket Ranker"),
+      el("button", { class: "title", onclick: () => this.h.onHome(), title: "Back to start" }, "Toski Ranker"),
       el("span", {}, `${this.session.state.player} · ${placed}/${total} placed`),
       el(
         "span",
@@ -106,7 +105,6 @@ export class UI {
         style: `width:${total ? (placed / total) * 100 : 0}%`,
       })
     );
-    // One-shot notice (e.g. "sheet changed: 2 decks added") set by main.js.
     const pieces = [bar, track];
     if (this.flash) {
       pieces.push(el("div", { class: "notice slim" }, this.flash));
@@ -174,14 +172,14 @@ export class UI {
 
   renderLoading(msg = "Loading deck list from Google Sheets…") {
     this.clear();
-    this.root.append(el("div", { class: "start" }, el("h1", {}, "EDH Bracket Ranker"), el("p", { class: "sub" }, msg)));
+    this.root.append(el("div", { class: "start" }, el("h1", {}, "Toski Ranker"), el("p", { class: "sub" }, msg)));
   }
 
   renderError(message) {
     this.clear();
     this.root.append(
       el("div", { class: "start" },
-        el("h1", {}, "EDH Bracket Ranker"),
+        el("h1", {}, "Toski Ranker"),
         el("div", { class: "error" },
           el("strong", {}, "Couldn't load the deck list."),
           el("p", {}, message),
@@ -259,7 +257,7 @@ export class UI {
 
     this.root.append(
       el("div", { class: "start" },
-        el("h1", {}, "EDH Bracket Ranker"),
+        el("h1", {}, "Toski Ranker"),
         el("p", { class: "sub" }, "Every deck, one at a time. Pick a bracket, answer a couple of comparisons, done. Progress saves automatically — close the tab whenever."),
         select,
         scopeRow,
@@ -386,7 +384,7 @@ export class UI {
         el("h2", {}, tier.label)
       );
       // Strongest first within the tier — matches how players talk about lists.
-      [...groups].reverse().forEach((group, gi, arr) => {
+      for (const group of [...groups].reverse()) {
         for (const id of group) {
           const d = this.deck(id);
           section.append(
@@ -400,7 +398,7 @@ export class UI {
             )
           );
         }
-      });
+      }
       container.append(section);
     }
 
@@ -436,7 +434,7 @@ export class UI {
      gradient running weak → strong; each placed deck's art sits ON the axis
      at its exact decimal score, like events on a timeline. When two decks
      would overlap horizontally (ties land at identical x), they stack
-     vertically instead, and the dock grows upward to fit. ------------------*/
+     vertically instead. ---------------------------------------------------*/
 
   dock() {
     const scores = computeScores(this.session.state.buckets);
@@ -520,9 +518,9 @@ export class UI {
     const MAX_LANES = 5;
 
     // Adaptive density: start with comfortable horizontal spacing; if the
-    // stacks grow too tall for the viewport, tighten the gap (thumbs shingle
-    // harder) until the tallest stack fits. Exact ties always stack no
-    // matter the gap, which is precisely the behavior we want.
+    // stacks grow too tall, tighten the gap (thumbs shingle harder) until
+    // the tallest stack fits. Exact ties always stack no matter the gap,
+    // which is precisely the behavior we want.
     let gap = Math.round(THUMB * 0.6);
     let placed, maxLane;
     do {
@@ -540,11 +538,10 @@ export class UI {
       gap -= 3;
     } while (maxLane >= MAX_LANES && gap > 3);
 
-    // Height cap: many similar scores can pile into a very tall stack (see
-    // dense playgroups). Rather than let the dock eat the screen, compress
-    // the vertical step so the tallest stack fits MAX_H — thumbs shingle
-    // like a fanned hand of cards, and every deck stays visible and
-    // tappable (tap → info bar → re-rank).
+    // Height cap: many similar scores can pile into a very tall stack.
+    // Rather than let the dock eat the screen, compress the vertical step
+    // so the tallest stack fits MAX_H — thumbs shingle like a fanned hand
+    // of cards, and every deck stays visible and tappable.
     const MAX_H = W < 480 ? 92 : 130;
     const laneStep = maxLane > 0
       ? Math.min(LANE, Math.max(7, Math.floor((MAX_H - THUMB) / maxLane)))
@@ -573,13 +570,13 @@ export class UI {
 
   _placeholderThumb(e) {
     // No art URL: a monogram chip so the deck still shows on the timeline.
-    const initials = e.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+    const initials = (e.name ?? "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
     return el("span", { class: "dock-thumb placeholder" }, initials);
   }
 
-  /** All decks handled: a visual recap of every placement — each bracket's
-   *  decks shown as art cards in ranked order (strongest first), tied decks
-   *  clustered — plus the three ways to get the data to James. */
+  /** All decks handled: the full placements, rebuilt visually — every tier
+   *  strongest-first (B5 at the top), each deck as an art chip. Multi-deck
+   *  tie groups render as one visually joined cluster. */
   renderDone() {
     this.clear();
     this.root.append(...this.topbar(false));
