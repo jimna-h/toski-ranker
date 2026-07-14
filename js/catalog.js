@@ -2,9 +2,9 @@
 // catalog.js — the immutable deck catalog for a session.
 //
 // The catalog (what decks exist) is kept strictly separate from ranking
-// state (what the user has decided). Future features that enrich decks —
-// commander art, Archidekt links, color identity — live here and never
-// touch the ranking engine.
+// state (what the user has decided). Features that enrich decks — commander
+// art, Archidekt links, color identity — live here and never touch the
+// ranking engine.
 // ---------------------------------------------------------------------------
 
 /**
