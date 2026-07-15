@@ -1,19 +1,24 @@
 // ---------------------------------------------------------------------------
 // results.js — the aggregate view. Reads the "final" tab of the aggregation
-// sheet (DeckID, DeckName, Owner, Bracket, NumericRating, OwnerRating,
-// Difference), joins it by DeckID against the live deck catalog (art, color
-// identity, Archidekt links), and renders:
-//   1. filter chips — players and WUBRG colors, all on by default;
-//   2. the full-collection power timeline (the app's dock, sticky, with a
-//      compact/expanded toggle);
-//   3. tier bands of art cards, strongest first, with a lightbox per deck
-//      that draws the table-vs-owner stat as pins on a gradient slice.
+// sheet (DeckID, DeckName, Owner, NumericRating, OwnerRating, Difference),
+// joins it by DeckID (with rename/whitespace-tolerant fallbacks) against the
+// live deck catalog (art, color identity, Archidekt links), and renders:
+//   1. filter chips — players, then color Include and color Exclude rows;
+//   2. the full-collection power timeline (compact & sticky, or expanded to
+//      the full viewport width);
+//   3. tier bands of art cards, strongest first, with owner-vs-table badges
+//      and a lightbox that draws the stat as pins on a gradient slice.
 //
 // Filtering semantics (per James):
 //   • a deck is shown iff its OWNER's chip is on, AND
-//   • at least one of the deck's colors is on — so with only R off, WUR
-//     still shows (W and U are on); only mono-R vanishes. Colorless decks
-//     ride the ◇ chip.
+//   • at least one of its colors is in the Include set (colorless rides ◇),
+//   • AND none of its colors is in the Exclude set. Include defaults to
+//     everything on; Exclude defaults to everything off — "show me decks
+//     without blue" is one tap on Exclude-U instead of four on Include.
+//
+// Architecture note: the DOM is built ONCE. Filters toggle a .hidden class
+// and re-position timeline thumbs — nothing is rebuilt, so no image ever
+// reloads and the page never flashes or jumps on a toggle.
 //
 // Read-only and standalone: no state, no localStorage, nothing here can
 // touch a ranking session. Sheets remain the source of truth.
@@ -97,29 +102,36 @@ function tierOf(score) {
 const tint = (score) => powerTint((score - 1) / 5);
 
 /* ---- color identity ----------------------------------------------------------
-   Identities arrive as strings like "WUBRG", "wur", "R/G", "Grixis"-adjacent
-   junk — extract only WUBRG letters, in canonical order. No letters at all
-   (or "C") → colorless. */
+   Identities arrive as strings like "WUBRG", "wur", "R/G" — extract only
+   WUBRG letters, in canonical order. No letters at all → colorless. */
 const WUBRG = ["W", "U", "B", "R", "G"];
+const COLOR_C = "C";
 function parseIdentity(raw) {
   const letters = new Set(
     String(raw ?? "").toUpperCase().split("").filter((ch) => WUBRG.includes(ch)));
   return WUBRG.filter((c) => letters.has(c)); // canonical order, [] = colorless
 }
 
-/* ---- filter state ------------------------------------------------------------
-   Everything on by default. COLOR_C is the colorless bucket's key. */
-const COLOR_C = "C";
+/* ---- filter state ------------------------------------------------------------ */
 const filters = {
-  players: new Set(),           // filled at boot from the data
-  colors: new Set([...WUBRG, COLOR_C]),
+  players: new Set(),                       // filled at boot
+  include: new Set([...WUBRG, COLOR_C]),    // all on by default
+  exclude: new Set(),                       // all off by default
 };
 let allPlayers = [];
 
 function passesFilters(e) {
   if (!filters.players.has(e.owner)) return false;
-  if (e.colors.length === 0) return filters.colors.has(COLOR_C);
-  return e.colors.some((c) => filters.colors.has(c)); // any shared color keeps it
+  if (e.colors.length === 0) {
+    return filters.include.has(COLOR_C) && !filters.exclude.has(COLOR_C);
+  }
+  if (e.colors.some((c) => filters.exclude.has(c))) return false; // veto
+  return e.colors.some((c) => filters.include.has(c));            // union
+}
+function filtersPristine() {
+  return filters.players.size === allPlayers.length
+    && filters.include.size === WUBRG.length + 1
+    && filters.exclude.size === 0;
 }
 
 /* ---- art helpers -------------------------------------------------------------- */
@@ -135,7 +147,7 @@ function thumbFor(entry, cls) {
   });
 }
 
-/** WUBRG pips (plus ◇ for colorless), used on filter chips and the lightbox. */
+/** WUBRG pips (plus ◇ for colorless), used on the lightbox. */
 function manaPips(colors) {
   const wrap = el("span", { class: "mana-pips" });
   if (!colors.length) wrap.append(el("span", { class: "mana-pip mana-C", title: "Colorless" }, "◇"));
@@ -145,55 +157,80 @@ function manaPips(colors) {
   return wrap;
 }
 
-/* ---- filter bar ----------------------------------------------------------------- */
-function renderFilterBar() {
-  const playerChips = allPlayers.map((p) =>
-    chip(p, filters.players.has(p), () => toggle(filters.players, p)));
+/* ---- filter bar (built once; chips restyle in place) ----------------------- */
+const chipRegistry = []; // { el, isOn } pairs refreshed by syncChips()
 
-  const colorChips = [...WUBRG, COLOR_C].map((c) =>
-    el("button", {
-      class: `chip color-chip mana-${c}${filters.colors.has(c) ? " on" : ""}`,
-      title: c === COLOR_C ? "Colorless" : c,
-      onclick: () => toggle(filters.colors, c),
-    }, c === COLOR_C ? "◇" : c));
+function registerChip(node, isOn) {
+  chipRegistry.push({ node, isOn });
+  return node;
+}
+function syncChips() {
+  for (const { node, isOn } of chipRegistry) node.classList.toggle("on", isOn());
+  const reset = document.querySelector(".chip.reset");
+  if (reset) reset.classList.toggle("hidden", filtersPristine());
+}
 
-  const anyOff = filters.players.size < allPlayers.length
-    || filters.colors.size < WUBRG.length + 1;
+function buildFilterBar() {
+  const playerChips = allPlayers.map((p) => registerChip(
+    el("button", { class: "chip", onclick: () => { flip(filters.players, p); applyFilters(); } }, p),
+    () => filters.players.has(p)));
+
+  const colorRow = (label, set, cls) =>
+    el("div", { class: "chip-row" },
+      el("span", { class: "chip-row-label" }, label),
+      ...[...WUBRG, COLOR_C].map((c) => registerChip(
+        el("button", {
+          class: `chip color-chip ${cls} mana-${c}`,
+          title: c === COLOR_C ? "Colorless" : c,
+          onclick: () => { flip(set, c); applyFilters(); },
+        }, c === COLOR_C ? "◇" : c),
+        () => set.has(c))));
+
+  const reset = el("button", {
+    class: "chip reset hidden",
+    onclick: () => {
+      // Mutate the Sets in place — the chips' click handlers hold references
+      // to these exact objects; replacing them would orphan every chip.
+      filters.players.clear();
+      for (const p of allPlayers) filters.players.add(p);
+      filters.include.clear();
+      for (const c of [...WUBRG, COLOR_C]) filters.include.add(c);
+      filters.exclude.clear();
+      applyFilters();
+    },
+  }, "Reset");
 
   return el("nav", { class: "filter-bar" },
-    el("div", { class: "chip-row" }, ...playerChips),
     el("div", { class: "chip-row" },
-      ...colorChips,
-      anyOff
-        ? el("button", { class: "chip reset", onclick: resetFilters }, "Reset")
-        : ""),
+      el("span", { class: "chip-row-label" }, "Players"), ...playerChips, reset),
+    colorRow("Include", filters.include, "inc"),
+    colorRow("Exclude", filters.exclude, "exc"),
   );
 }
-function chip(label, on, onclick) {
-  return el("button", { class: `chip${on ? " on" : ""}`, onclick }, label);
-}
-function toggle(set, key) {
-  set.has(key) ? set.delete(key) : set.add(key);
-  renderAll();
-}
-function resetFilters() {
-  filters.players = new Set(allPlayers);
-  filters.colors = new Set([...WUBRG, COLOR_C]);
-  renderAll();
-}
+function flip(set, key) { set.has(key) ? set.delete(key) : set.add(key); }
 
 /* ---- timeline (the app's dock, promoted to a hero) ---------------------------
-   Two modes. Compact: the familiar dock strip, sticky at the top. Expanded:
-   roomier lanes and bigger thumbs for actually reading the collection's
-   shape — the whole point of the axis — especially on desktop. */
-let timelineEntries = [];
+   Thumbs are created ONCE into a pool; layout only moves/hides them. Two
+   modes: compact (sticky strip) and expanded (full viewport width, taller,
+   bigger thumbs — actually reading the collection's shape). */
+let timelineEntries = [];        // all entries, ascending score
 let timelineExpanded = false;
+const thumbPool = new Map();     // deckId → element
+let canvasEl = null;
 
-function renderTimeline(entries) {
+function buildTimeline(entries) {
   timelineEntries = [...entries].sort(
     (a, b) => a.score - b.score || a.name.localeCompare(b.name));
 
-  const canvas = el("div", { class: "dock-canvas results-canvas" });
+  canvasEl = el("div", { class: "dock-canvas results-canvas" });
+  for (const e of timelineEntries) {
+    const thumb = thumbFor(e, "dock-thumb");
+    thumb.title = `${e.name} (${e.owner}) — ${e.score.toFixed(2)}`;
+    thumb.addEventListener("click", () => jumpToDeck(e.id));
+    thumbPool.set(e.id, thumb);
+    canvasEl.append(thumb);
+  }
+
   const axis = el("div", { class: "dock-axis" });
   const tickAt = (v, major) => el("span", {
     class: `dock-tick${major ? " major" : ""}`,
@@ -204,29 +241,35 @@ function renderTimeline(entries) {
   const labels = el("div", { class: "dock-labels" },
     ...["B1", "B2", "B3", "B4", "B5"].map((b) => el("span", {}, b)));
 
-  const expandBtn = el("button", {
-    class: "timeline-expand",
-    title: timelineExpanded ? "Compact timeline" : "Expand timeline",
-    onclick: () => { timelineExpanded = !timelineExpanded; renderAll(); },
-  }, timelineExpanded ? "▾ compact" : "▴ expand");
-
-  const wrap = el("section", {
-    class: `results-timeline${timelineExpanded ? " expanded" : ""}`,
-  }, expandBtn, canvas, axis, labels);
+  const expandBtn = el("button", { class: "timeline-expand" }, "⤢ expand");
+  const wrap = el("section", { class: "results-timeline" },
+    expandBtn, canvasEl, axis, labels);
+  expandBtn.addEventListener("click", () => {
+    timelineExpanded = !timelineExpanded;
+    wrap.classList.toggle("expanded", timelineExpanded);
+    expandBtn.textContent = timelineExpanded ? "⤡ compact" : "⤢ expand";
+    // Width changes with the class; lay out after the style lands.
+    requestAnimationFrame(layoutTimeline);
+  });
   requestAnimationFrame(layoutTimeline);
   return wrap;
 }
 
-/* Same greedy-lane algorithm as ui.js's _layoutDock; the mode only changes
-   the knobs (thumb size, lane count, height cap). */
+/* Same greedy-lane algorithm as ui.js's _layoutDock, over VISIBLE entries
+   only; hidden thumbs get display:none, never removed. */
 function layoutTimeline() {
-  const canvas = document.querySelector(".results-canvas");
-  if (!canvas) return;
-  if (!timelineEntries.length) { canvas.replaceChildren(); canvas.style.height = "24px"; return; }
-  const W = canvas.clientWidth;
+  if (!canvasEl) return;
+  const visible = timelineEntries.filter(passesFilters);
+  const hiddenIds = new Set(timelineEntries.map((e) => e.id));
+  const W = canvasEl.clientWidth;
+  if (!visible.length || !W) {
+    for (const id of hiddenIds) thumbPool.get(id).style.display = "none";
+    canvasEl.style.height = "24px";
+    return;
+  }
   const desktop = W >= 480;
   const base = timelineExpanded ? (desktop ? 56 : 38) : (desktop ? 40 : 30);
-  const density = W / timelineEntries.length;
+  const density = W / visible.length;
   const THUMB = Math.round(Math.max(timelineExpanded ? 26 : 20,
     Math.min(base, density * (timelineExpanded ? 2.4 : 1.6))));
   const LANE = Math.round(THUMB * 0.76);
@@ -238,7 +281,7 @@ function layoutTimeline() {
     placed = [];
     maxLane = 0;
     const laneRight = [];
-    for (const e of timelineEntries) {
+    for (const e of visible) {
       const x = ((e.score - 1) / 5) * (W - THUMB);
       let lane = 0;
       while (laneRight[lane] !== undefined && x - laneRight[lane] < gap) lane++;
@@ -256,58 +299,63 @@ function layoutTimeline() {
     ? Math.min(LANE, Math.max(8, Math.floor((MAX_H - THUMB) / maxLane)))
     : LANE;
 
-  canvas.replaceChildren();
   for (const { e, x, lane } of placed) {
-    const thumb = thumbFor(e, "dock-thumb");
-    thumb.title = `${e.name} (${e.owner}) — ${e.score.toFixed(2)}`;
+    hiddenIds.delete(e.id);
+    const thumb = thumbPool.get(e.id);
+    thumb.style.display = "";
     thumb.style.left = `${x}px`;
     thumb.style.bottom = `${lane * laneStep}px`;
     thumb.style.width = thumb.style.height = `${THUMB}px`;
     thumb.style.zIndex = lane + 1;
-    thumb.addEventListener("click", () => jumpToDeck(e.id));
-    canvas.append(thumb);
   }
-  canvas.style.height = `${maxLane * laneStep + THUMB + 4}px`;
+  for (const id of hiddenIds) thumbPool.get(id).style.display = "none";
+  canvasEl.style.height = `${maxLane * laneStep + THUMB + 4}px`;
 }
 
 /** Timeline thumb tapped → scroll its gallery card into view and flash it. */
 function jumpToDeck(id) {
   const card = document.querySelector(`.deck-card[data-id="${CSS.escape(id)}"]`);
-  if (!card) return;
+  if (!card || card.classList.contains("hidden")) return;
   card.scrollIntoView({ behavior: "smooth", block: "center" });
   card.classList.remove("flash"); // restart animation if re-tapped
   void card.offsetWidth;
   card.classList.add("flash");
 }
 
-/* ---- tier gallery --------------------------------------------------------------
-   Strongest tier first, each tier a tinted band of art cards. Text only
-   where a picture can't do the job. Ranks are computed over the FULL table,
-   not the filtered view — #1 stays #1 no matter what's hidden. */
+/* ---- tier gallery (built once) -----------------------------------------------
+   Strongest tier first, each tier a tinted band of art cards. Ranks are
+   fixed over the FULL table — filters never renumber decks. Filtering hides
+   cards (and emptied bands) with a class; nothing is rebuilt. */
 let rankById = new Map();
+const cardById = new Map();  // deckId → card element
+const bands = [];            // { el, cards: entry[] }
 
-function renderGallery(entries) {
+function buildGallery(entries) {
   const sorted = [...entries].sort(
     (a, b) => b.score - a.score || a.name.localeCompare(b.name));
 
   const wrap = el("section", { class: "results-gallery" });
-  if (!sorted.length) {
-    wrap.append(el("p", { class: "empty-note" }, "Nothing matches these filters."));
-    return wrap;
-  }
-  let band = null, lastTier = null;
+  const empty = el("p", { class: "empty-note hidden" }, "Nothing matches these filters.");
+  wrap.append(empty);
+
+  let grid = null, lastTier = null, bandRec = null;
   for (const e of sorted) {
     const tier = tierOf(e.score);
     if (tier !== lastTier) {
       lastTier = tier;
-      const tierTint = tint((tier.low + tier.high) / 2);
-      band = el("div", { class: "tier-grid" });
-      wrap.append(
-        el("section", { class: "tier-band", style: `--tier-tint:${tierTint}` },
-          el("h2", { class: "tier-band-label" }, tier.label),
-          band));
+      grid = el("div", { class: "tier-grid" });
+      const bandEl = el("section", {
+        class: "tier-band",
+        style: `--tier-tint:${tint((tier.low + tier.high) / 2)}`,
+      }, el("h2", { class: "tier-band-label" }, tier.label), grid);
+      bandRec = { el: bandEl, cards: [] };
+      bands.push(bandRec);
+      wrap.append(bandEl);
     }
-    band.append(deckCard(e, rankById.get(e.id)));
+    const card = deckCard(e, rankById.get(e.id));
+    cardById.set(e.id, card);
+    bandRec.cards.push(e);
+    grid.append(card);
   }
   return wrap;
 }
@@ -456,29 +504,32 @@ function miniAxis(e) {
 
 function hideOnError(ev) { ev.target.remove(); }
 
-/* ---- boot & rerender ------------------------------------------------------------- */
+/* ---- filtering (in place — the no-flash core) --------------------------------- */
 let allEntries = [];
+let subEl = null;
 
-function renderAll() {
-  const shown = allEntries.filter(passesFilters);
-  const owners = new Set(shown.map((e) => e.owner));
-  const countLine = shown.length === allEntries.length
-    ? `${allEntries.length} decks \u00b7 ${owners.size} owners \u00b7 group averages`
-    : `${shown.length} of ${allEntries.length} decks shown`;
-
-  app.replaceChildren(
-    el("header", { class: "results-header" },
-      el("h1", {}, "The Table Has Spoken"),
-      el("p", { class: "results-sub" }, countLine)),
-    renderFilterBar(),
-    renderTimeline(shown),
-    renderGallery(shown),
-    el("footer", { class: "results-footer" },
-      "Scores are the group's mean rating on the fixed bracket scale (1\u20136). ",
-      "Tap any deck: pins show the table's rating vs the owner's own."),
-  );
+function applyFilters() {
+  syncChips();
+  let shownCount = 0;
+  for (const e of allEntries) {
+    const show = passesFilters(e);
+    if (show) shownCount++;
+    cardById.get(e.id)?.classList.toggle("hidden", !show);
+  }
+  for (const band of bands) {
+    band.el.classList.toggle("hidden", !band.cards.some(passesFilters));
+  }
+  document.querySelector(".empty-note")?.classList.toggle("hidden", shownCount > 0);
+  if (subEl) {
+    const owners = new Set(allEntries.filter(passesFilters).map((e) => e.owner));
+    subEl.textContent = shownCount === allEntries.length
+      ? `${allEntries.length} decks \u00b7 ${owners.size} owners \u00b7 group averages`
+      : `${shownCount} of ${allEntries.length} decks shown`;
+  }
+  layoutTimeline();
 }
 
+/* ---- boot --------------------------------------------------------------------- */
 async function boot() {
   try {
     // Scores and catalog load in parallel; a catalog failure only costs art
@@ -508,7 +559,7 @@ async function boot() {
       const d = catalog.get(e.id)
         ?? catalog.get(deckId(e.owner, e.name))
         ?? byNormName.get(`${norm(e.owner)}\u0000${norm(e.name)}`);
-      if (!d) console.warn(`No catalog match for "${e.name}" (${e.owner}) — ` +
+      if (!d) console.warn(`No catalog match for "${e.name}" (${e.owner}) \u2014 ` +
         `id ${e.id}; check the final tab's DeckID/owner/name against the data sheet.`);
       e.art = d?.artUrl || "";
       e.artPartner = d?.artUrlPartner || "";
@@ -525,7 +576,18 @@ async function boot() {
     allPlayers = [...new Set(allEntries.map((e) => e.owner))].sort();
     filters.players = new Set(allPlayers);
 
-    renderAll();
+    subEl = el("p", { class: "results-sub" }, "");
+    app.replaceChildren(
+      el("header", { class: "results-header" },
+        el("h1", {}, "The Table Has Spoken"), subEl),
+      buildFilterBar(),
+      buildTimeline(allEntries),
+      buildGallery(allEntries),
+      el("footer", { class: "results-footer" },
+        "Scores are the group's mean rating on the fixed bracket scale (1\u20136). ",
+        "Tap any deck: pins show the table's rating vs the owner's own."),
+    );
+    applyFilters(); // sets counts + chip states; nothing is hidden yet
     window.addEventListener("resize", layoutTimeline);
   } catch (err) {
     console.error(err);

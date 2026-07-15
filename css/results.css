@@ -23,9 +23,19 @@
 .chip-row {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
   gap: 0.35rem;
   margin-bottom: 0.4rem;
+}
+.chip-row-label {
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--parchment-dim);
+  min-width: 3.6rem;
+  text-align: right;
+  margin-right: 0.15rem;
 }
 .chip {
   font-size: 0.78rem;
@@ -56,13 +66,23 @@
   font-weight: 700;
   padding: 0.28rem 0.5rem;
 }
-.color-chip.on { color: #14161a; border-color: transparent; }
-.color-chip.mana-W.on { background: #f5f0dc; }
-.color-chip.mana-U.on { background: #7fb2d8; }
-.color-chip.mana-B.on { background: #a99bb0; }
-.color-chip.mana-R.on { background: #df9a83; }
-.color-chip.mana-G.on { background: #94c299; }
-.color-chip.mana-C.on { background: #c9c4bd; }
+.color-chip.inc.on { color: #14161a; border-color: transparent; }
+.color-chip.inc.mana-W.on { background: #f5f0dc; }
+.color-chip.inc.mana-U.on { background: #7fb2d8; }
+.color-chip.inc.mana-B.on { background: #a99bb0; }
+.color-chip.inc.mana-R.on { background: #df9a83; }
+.color-chip.inc.mana-G.on { background: #94c299; }
+.color-chip.inc.mana-C.on { background: #c9c4bd; }
+
+/* Exclude chips read as a veto, not a selection: when on, ember ring and a
+   strike through the letter instead of a mana-color fill. */
+.color-chip.exc.on {
+  background: color-mix(in srgb, var(--p5) 26%, var(--felt-raised));
+  color: var(--parchment);
+  border-color: var(--p5);
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
 
 /* Small identity pips (lightbox). */
 .mana-pips { display: inline-flex; gap: 2px; vertical-align: middle; }
@@ -120,9 +140,21 @@
 }
 .timeline-expand:hover { color: var(--parchment); }
 .results-timeline.expanded {
-  position: relative;    /* un-stick, but keep an anchor for the button */
+  /* Full-bleed: break out of the centered column to the viewport edges.
+     Un-stick — a tall timeline shouldn't shadow the page — but stay
+     positioned so the corner button keeps its anchor. */
+  position: relative;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  padding-left: max(0.9rem, env(safe-area-inset-left));
+  padding-right: max(0.9rem, env(safe-area-inset-right));
   backdrop-filter: none;
 }
+.results-timeline.expanded .timeline-expand {
+  right: max(0.9rem, env(safe-area-inset-right));
+}
+
+.hidden { display: none !important; }
 .dock-thumb.placeholder {
   display: inline-flex;
   align-items: center;
