@@ -58,6 +58,8 @@
   color: var(--focus);
   border-color: color-mix(in srgb, var(--focus) 55%, var(--line));
 }
+.reset-row { margin-top: 0.1rem; }
+.stat-value.pending { font-style: italic; }
 .lens-chip.on {
   background: color-mix(in srgb, #8fb4e3 22%, var(--felt-raised));
   border-color: #8fb4e3;

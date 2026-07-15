@@ -154,13 +154,6 @@ function passesFilters(e) {
   if (e.colors.some((c) => filters.exclude.has(c))) return false; // veto
   return e.colors.some((c) => filters.include.has(c));            // union
 }
-function filtersPristine() {
-  return filters.players.size === allPlayers.length
-    && filters.include.size === WUBRG.length + 1
-    && filters.exclude.size === 0
-    && ratersPristine();
-}
-
 /* ---- rater include filter --------------------------------------------------------
    "Ratings by" is a multi-select over raters, all on by default — the
    displayed score for every deck is the MEAN OF THE ENABLED RATERS' ratings,
@@ -239,8 +232,6 @@ function registerChip(node, isOn) {
 }
 function syncChips() {
   for (const { node, isOn } of chipRegistry) node.classList.toggle("on", isOn());
-  const reset = document.querySelector(".chip.reset");
-  if (reset) reset.classList.toggle("hidden", filtersPristine());
 }
 
 function buildFilterBar() {
@@ -260,7 +251,7 @@ function buildFilterBar() {
         () => set.has(c))));
 
   const reset = el("button", {
-    class: "chip reset hidden",
+    class: "chip reset",
     onclick: () => {
       // Mutate the Sets in place — the chips' click handlers hold references
       // to these exact objects; replacing them would orphan every chip.
@@ -302,10 +293,11 @@ function buildFilterBar() {
 
   return el("nav", { class: "filter-bar" },
     el("div", { class: "chip-row" },
-      el("span", { class: "chip-row-label" }, "Owners"), ...playerChips, reset),
+      el("span", { class: "chip-row-label" }, "Owners"), ...playerChips),
     colorRow("Include", filters.include, "inc"),
     colorRow("Exclude", filters.exclude, "exc"),
     lensRow,
+    el("div", { class: "chip-row reset-row" }, reset),
   );
 }
 function flip(set, key) { set.has(key) ? set.delete(key) : set.add(key); }
@@ -689,14 +681,21 @@ function raterStats() {
       devs.get(rater).push(v - others);
     }
   }
-  return [...devs.entries()]
-    .map(([rater, ds]) => ({
-      rater,
-      n: ds.length,
-      bias: ds.reduce((a, b) => a + b, 0) / ds.length,
-      spread: ds.reduce((a, b) => a + Math.abs(b), 0) / ds.length,
-    }))
-    .sort((a, b) => a.spread - b.spread); // most table-aligned first
+  // Every known rater gets a row — players who haven't submitted (or whose
+  // every rated deck has no second rating to compare against) show as
+  // pending rather than silently vanishing from the report.
+  return allRaters
+    .map((rater) => {
+      const ds = devs.get(rater);
+      if (!ds) return { rater, n: 0, bias: null, spread: null };
+      return {
+        rater,
+        n: ds.length,
+        bias: ds.reduce((a, b) => a + b, 0) / ds.length,
+        spread: ds.reduce((a, b) => a + Math.abs(b), 0) / ds.length,
+      };
+    })
+    .sort((a, b) => (a.spread ?? Infinity) - (b.spread ?? Infinity));
 }
 
 /** Full-range (1–6) gradient, sampled from the same powerTint as everything
@@ -726,7 +725,16 @@ function buildStats() {
   // outlier doesn't flatten everyone else's bars.
   const CAP = 0.6;
   const raterRows = raters.map(({ rater, n, bias, spread }) => {
+    if (bias === null) {
+      return el("div", { class: "stat-row" },
+        el("span", { class: "stat-name" }, rater),
+        el("div", { class: "bias-track" }, el("span", { class: "bias-zero" })),
+        el("span", { class: "stat-value pending" }, "no ratings yet"));
+    }
     const w = Math.min(Math.abs(bias) / CAP, 1) * 50;
+    const dir = Math.abs(bias) < 0.05 ? "in line with the table"
+      : bias > 0 ? `rates ${bias.toFixed(2)} higher than the table`
+      : `rates ${Math.abs(bias).toFixed(2)} lower than the table`;
     return el("div", { class: "stat-row" },
       el("span", { class: "stat-name" }, rater),
       el("div", { class: "bias-track" },
@@ -736,7 +744,7 @@ function buildStats() {
           style: bias >= 0 ? `left:50%;width:${w}%` : `left:${50 - w}%;width:${w}%`,
         })),
       el("span", { class: "stat-value" },
-        `${bias >= 0 ? "+" : ""}${bias.toFixed(2)} bias · ±${spread.toFixed(2)} spread · ${n}`));
+        `${dir} · typically ±${spread.toFixed(2)} off · ${n} ratings`));
   });
 
   if (!ownerRows.length && !raterRows.length) return "";
@@ -748,8 +756,11 @@ function buildStats() {
     raterRows.length ? el("div", { class: "stat-panel" },
       el("h2", { class: "stat-title" }, "Rater report"),
       el("p", { class: "stat-sub" },
-        "Each rater vs the table without them. Bias: rates hot (▶) or cold (◀). " +
-        "Spread: average size of disagreement either way."),
+        "How each player's ratings compare with everyone else's on the same " +
+        "decks. The bar shows their lean: right (ember) means they score decks " +
+        "higher than the rest of the table on average; left (jade) means lower. " +
+        "“Typically ±X off” is how far their rating usually lands " +
+        "from the others' average, in bracket points, in either direction."),
       ...raterRows) : "",
   );
 }
