@@ -172,112 +172,173 @@ function layoutTimeline() {
   canvas.style.height = `${maxLane * laneStep + THUMB + 4}px`;
 }
 
-/** Timeline thumb tapped → scroll its list row into view and flash it. */
+/** Timeline thumb tapped → scroll its gallery card into view and flash it. */
 function jumpToDeck(id) {
-  const row = document.querySelector(`.result-row[data-id="${CSS.escape(id)}"]`);
-  if (!row) return;
-  row.scrollIntoView({ behavior: "smooth", block: "center" });
-  row.classList.remove("flash"); // restart animation if re-tapped
-  void row.offsetWidth;
-  row.classList.add("flash");
+  const card = document.querySelector(`.deck-card[data-id="${CSS.escape(id)}"]`);
+  if (!card) return;
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  card.classList.remove("flash"); // restart animation if re-tapped
+  void card.offsetWidth;
+  card.classList.add("flash");
 }
 
-/* ---- ranked list ----------------------------------------------------------
-   Strongest first. Rows expand on tap — small thumbs on phones mean detail
-   belongs behind a deliberate second look, same philosophy as the dock's
-   two-step info bar. */
-function renderList(entries) {
+/* ---- tier gallery ----------------------------------------------------------
+   The done-screen idea, promoted: strongest tier first, each tier a tinted
+   band holding art cards. Cards are art-dominant — name and score live in a
+   thin gradient caption; everything else waits in the lightbox. Text only
+   where a picture can't do the job. */
+function renderGallery(entries) {
   const sorted = [...entries].sort(
     (a, b) => b.score - a.score || a.name.localeCompare(b.name));
 
-  const list = el("section", { class: "results-list" });
-  let lastTier = null;
-  sorted.forEach((e, i) => {
+  const wrap = el("section", { class: "results-gallery" });
+  let band = null, lastTier = null, rank = 0;
+  for (const e of sorted) {
+    rank++;
     const tier = tierOf(e.score);
     if (tier !== lastTier) {
       lastTier = tier;
-      list.append(el("h2", {
-        class: "results-tier-head",
-        style: `--tier-tint:${tint((tier.low + tier.high) / 2)}`,
-      }, e.bracket || tier.label));
+      const tierTint = tint((tier.low + tier.high) / 2);
+      band = el("div", { class: "tier-grid" });
+      wrap.append(
+        el("section", { class: "tier-band", style: `--tier-tint:${tierTint}` },
+          el("h2", { class: "tier-band-label" }, e.bracket || tier.label),
+          band));
     }
-    list.append(resultRow(e, i + 1));
-  });
-  return list;
+    band.append(deckCard(e, rank));
+  }
+  return wrap;
 }
 
-function resultRow(e, rank) {
-  const scoreChip = el("span", {
-    class: "score-chip",
+function deckCard(e, rank) {
+  const card = el("article", {
+    class: "deck-card",
     style: `--tier-tint:${tint(e.score)}`,
-  }, e.score.toFixed(2));
-
-  const head = el("div", { class: "result-head" },
-    el("span", { class: "result-rank" }, `${rank}`),
-    thumbFor(e, "result-thumb"),
-    el("span", { class: "result-name" },
-      e.name, " ",
-      el("span", { class: "who" }, `· ${e.owner}`)),
-    scoreChip,
-  );
-
-  const row = el("article", { class: "result-row" }, head);
-  row.dataset.id = e.id;
-
-  let detail = null;
-  head.addEventListener("click", () => {
-    if (detail) { detail.remove(); detail = null; row.classList.remove("open"); return; }
-    detail = resultDetail(e);
-    row.append(detail);
-    row.classList.add("open");
+    onclick: () => openLightbox(e, rank),
   });
-  return row;
-}
+  card.dataset.id = e.id;
 
-function resultDetail(e) {
-  const bits = [];
-
-  // Commander art, full width; partners side by side in the app's letterbox
-  // style. Missing art simply omits the panel — the row already identifies
-  // the deck.
+  // Art fills the card; partners split it. No art → tinted monogram panel.
   if (e.art && e.artPartner) {
-    bits.push(el("div", { class: "detail-art partners" },
+    card.append(el("div", { class: "card-art partners" },
       el("img", { src: e.art, alt: "", loading: "lazy", onerror: hideOnError }),
-      el("img", { src: e.artPartner, alt: "", loading: "lazy", onerror: hideOnError }),
-    ));
+      el("img", { src: e.artPartner, alt: "", loading: "lazy", onerror: hideOnError })));
   } else if (e.art) {
-    bits.push(el("div", { class: "detail-art" },
-      el("img", { src: e.art, alt: "", loading: "lazy", onerror: hideOnError })));
-  }
-
-  // Group score vs the owner's own take. The sign framing ("above/below the
-  // table") reads better than a bare signed decimal.
-  const stats = el("dl", { class: "detail-stats" },
-    el("div", {}, el("dt", {}, "Group rating"), el("dd", {}, e.score.toFixed(2))),
-  );
-  if (e.ownerRating !== null) {
-    stats.append(el("div", {},
-      el("dt", {}, `${e.owner}'s own rating`), el("dd", {}, e.ownerRating.toFixed(2))));
-    const d = e.diff ?? (e.ownerRating - e.score);
-    const cls = d > 0.05 ? "up" : d < -0.05 ? "down" : "even";
-    const word = d > 0.05 ? "above the table" : d < -0.05 ? "below the table" : "in line with the table";
-    stats.append(el("div", {},
-      el("dt", {}, "Owner vs group"),
-      el("dd", { class: `diff ${cls}` }, `${d >= 0 ? "+" : ""}${d.toFixed(2)} — ${word}`)));
+    card.append(el("div", { class: "card-art" },
+      el("img", { src: e.art, alt: e.name, loading: "lazy",
+        onerror: (ev) => ev.target.parentElement.replaceWith(monogramPanel(e)) })));
   } else {
-    stats.append(el("div", {},
-      el("dt", {}, `${e.owner}'s own rating`),
-      el("dd", { class: "pending" }, "not submitted yet")));
+    card.append(monogramPanel(e));
   }
-  bits.push(stats);
 
-  if (e.archidektUrl) {
-    bits.push(el("a", {
-      class: "decklist-link", href: e.archidektUrl, target: "_blank", rel: "noopener",
-    }, "Decklist ↗"));
-  }
-  return el("div", { class: "result-detail" }, ...bits);
+  // Top three across the whole table get a medal, because of course they do.
+  if (rank <= 3) card.append(el("span", { class: "card-medal" }, ["🥇", "🥈", "🥉"][rank - 1]));
+
+  card.append(el("div", { class: "card-caption" },
+    el("span", { class: "card-name" }, e.name),
+    el("span", { class: "card-score" }, e.score.toFixed(2))));
+  return card;
 }
+
+function monogramPanel(e) {
+  return el("div", { class: "card-art monogram" }, e.name.slice(0, 2).toUpperCase());
+}
+
+/* ---- lightbox --------------------------------------------------------------
+   Tap a card → full-bleed art with the numbers drawn, not written: a slice
+   of the power gradient with two pins — the table's rating and the owner's
+   own. The gap between the pins IS the owner-bias stat. */
+function openLightbox(e, rank) {
+  closeLightbox();
+  const artEls = e.art && e.artPartner
+    ? [el("div", { class: "lb-art partners" },
+        el("img", { src: e.art, alt: "", onerror: hideOnError }),
+        el("img", { src: e.artPartner, alt: "", onerror: hideOnError }))]
+    : e.art
+      ? [el("div", { class: "lb-art" },
+          el("img", { src: e.art, alt: e.name, onerror: hideOnError }))]
+      : [];
+
+  const box = el("div", { class: "lightbox", onclick: (ev) => {
+    if (ev.target === box) closeLightbox();
+  }},
+    el("div", { class: "lb-panel" },
+      el("button", { class: "lb-close", onclick: closeLightbox }, "\u2715"),
+      ...artEls,
+      el("div", { class: "lb-title" },
+        el("span", { class: "lb-name" }, e.name),
+        el("span", { class: "lb-meta" }, `#${rank} \u00b7 ${e.owner}`)),
+      miniAxis(e),
+      el("div", { class: "lb-actions" },
+        e.archidektUrl
+          ? el("a", { class: "decklist-link", href: e.archidektUrl,
+              target: "_blank", rel: "noopener" }, "Decklist \u2197")
+          : "",
+      ),
+    ));
+  document.body.append(box);
+  document.body.classList.add("lb-open");
+}
+
+function closeLightbox() {
+  document.querySelector(".lightbox")?.remove();
+  document.body.classList.remove("lb-open");
+}
+document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeLightbox(); });
+
+/** A zoomed slice of the power axis around this deck's bracket, with a pin
+ *  for the group's rating and (when submitted) a second pin for the owner's
+ *  own — the visual replacement for v1's stats table. */
+function miniAxis(e) {
+  const scores = [e.score, e.ownerRating].filter((v) => v !== null);
+  // Window: the deck's whole bracket, padded so pins never sit on the edge,
+  // widened if the owner's rating strays outside it; clamped to 1–6.
+  const t = tierOf(e.score);
+  const bracketLow = Math.floor(t.low);
+  const bracketHigh = bracketLow + 1;
+  let lo = Math.max(1, Math.min(bracketLow, ...scores) - 0.15);
+  let hi = Math.min(6, Math.max(bracketHigh, ...scores) + 0.15);
+  const pos = (v) => ((v - lo) / (hi - lo)) * 100;
+
+  // The slice must show the same colors this range has on the full axis —
+  // sample powerTint along the window and stretch between the samples.
+  const axis = el("div", {
+    class: "mini-axis",
+    style: `background: linear-gradient(90deg, ${tint(lo)}, ${tint((lo + hi) / 2)}, ${tint(hi)})`,
+  });
+  // Sub-tier ticks inside the window (thirds; majors at whole brackets).
+  for (let k = Math.ceil(lo * 3); k <= Math.floor(hi * 3); k++) {
+    const v = k / 3;
+    if (v <= lo + 0.01 || v >= hi - 0.01) continue;
+    axis.append(el("span", {
+      class: `mini-tick${k % 3 === 0 ? " major" : ""}`,
+      style: `left:${pos(v)}%`,
+    }));
+  }
+
+  const pinEl = (cls, v, label) => {
+    const p = el("div", { class: `mini-pin ${cls}`, style: `left:${pos(v)}%` },
+      el("span", { class: "pin-label" }, label));
+    // Labels are centered on the pin; near an edge, hang them inward instead
+    // so they never clip out of the panel.
+    const pct = pos(v);
+    if (pct < 14) p.classList.add("edge-left");
+    else if (pct > 86) p.classList.add("edge-right");
+    return p;
+  };
+  const pins = el("div", { class: "mini-pins" },
+    pinEl("group", e.score, `table ${e.score.toFixed(2)}`));
+  if (e.ownerRating !== null) {
+    pins.append(pinEl("owner", e.ownerRating, `${e.owner} ${e.ownerRating.toFixed(2)}`));
+  } else {
+    pins.append(el("div", { class: "mini-pending" }, `${e.owner}: pending`));
+  }
+
+  const labels = el("div", { class: "mini-labels" },
+    el("span", {}, `B${Math.round(lo)}`), el("span", {}, `B${Math.round(hi)}`));
+  return el("div", { class: "mini-axis-wrap" }, pins, axis, labels);
+}
+
 function hideOnError(ev) { ev.target.remove(); }
 
 /* ---- boot ------------------------------------------------------------------ */
@@ -313,10 +374,10 @@ async function boot() {
           `${entries.length} decks · ${owners.size} owners · group averages`),
       ),
       renderTimeline(entries),
-      renderList(entries),
+      renderGallery(entries),
       el("footer", { class: "results-footer" },
         "Scores are the group's mean rating on the fixed bracket scale (1–6). ",
-        "Tap any deck for its owner's own take."),
+        "Tap any deck: pins show the table's rating vs the owner's own."),
     );
     window.addEventListener("resize", layoutTimeline);
   } catch (err) {
