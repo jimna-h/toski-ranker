@@ -18,6 +18,11 @@ export const SHEET_ID = "1HfTUoLol3h1DmDeWTDsUqYTjq99SV9NGi-CmB3Wk89g";
 /** Where "Send to James" delivers finished rankings. */
 export const EXPORT_EMAIL = "jimnah.mtg@gmail.com";
 
+/** Aggregation sheet (James's results workbook) and the tab results.html
+ *  reads. Must also be shared "anyone with the link can view". */
+export const RESULTS_SHEET_ID = "1gINrEt9MZfjVVfTkp4ayvCFTEbtrTPf2-Pv88Psbpug";
+export const RESULTS_TAB = "final";
+
 /** Worksheet tabs to ignore entirely. */
 export const IGNORED_TABS = ["Precons"];
 /** Deck names to ignore (exact match, case-insensitive). */

@@ -85,6 +85,28 @@ function parseTabRows(title, rows) {
   return decks;
 }
 
+/**
+ * Generic keyless fetch of any tab of any link-shared sheet, returned as an
+ * array of row arrays (header first). Exported so results.html can read the
+ * aggregation sheet's "final" tab through the exact same pipeline.
+ */
+export async function fetchSheetTabRows(sheetId, title) {
+  const url =
+    `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq` +
+    `?tqx=out:csv&sheet=${encodeURIComponent(title)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(
+      `Couldn't load tab "${title}" (${res.status}). Check the tab name and ` +
+      `that the sheet is shared "anyone with the link can view".`
+    );
+  }
+  return parseCsv(await res.text());
+}
+
+/** Case-insensitive column finder, shared with the results page. */
+export { findColumn };
+
 async function fetchTabCsv(title) {
   const url =
     `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq` +

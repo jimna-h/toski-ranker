@@ -1,0 +1,175 @@
+/* ---------------------------------------------------------------------------
+   results.css — layered over style.css. The playmat system stays intact;
+   this only adds the results page's own furniture. The timeline reuses the
+   dock's classes (thumb/axis/tick/labels) so the two views can never drift
+   apart visually — only the container rules change: in-flow instead of
+   fixed, and taller.
+--------------------------------------------------------------------------- */
+
+/* The app's stylesheet reserves footer room for its fixed dock; this page
+   has no fixed dock. */
+body:has(.results-list) #app,
+#app {
+  padding-bottom: 3rem;
+  max-width: 44rem;
+}
+
+.loading-msg { color: var(--parchment-dim); text-align: center; margin-top: 4rem; }
+
+.results-header { text-align: center; margin: 0.8rem 0 1rem; }
+.results-header h1 { margin: 0 0 0.15rem; font-size: 1.7rem; }
+.results-sub { margin: 0; color: var(--parchment-dim); font-size: 0.85rem; }
+
+/* ---- timeline (in-flow dock) ---- */
+.results-timeline {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 0.6rem 0 0.4rem;
+  background: color-mix(in srgb, var(--felt) 92%, transparent);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 1rem;
+}
+.results-canvas {
+  position: relative;
+  height: 44px; /* JS grows this */
+  transition: height 160ms ease;
+}
+.results-timeline .dock-thumb { cursor: pointer; }
+
+/* ---- ranked list ---- */
+.results-tier-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.05rem;
+  margin: 1.6rem 0 0.5rem;
+}
+.results-tier-head::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--tier-tint);
+  flex: none;
+}
+.results-tier-head::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.result-row {
+  background: var(--felt-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin-bottom: 0.45rem;
+  overflow: hidden;
+}
+.result-row.open { border-color: color-mix(in srgb, var(--focus) 50%, var(--line)); }
+.result-row.flash { animation: row-flash 1.4s ease; }
+@keyframes row-flash {
+  0%, 35% { outline: 2px solid var(--focus); outline-offset: -2px; }
+  100% { outline: 2px solid transparent; outline-offset: -2px; }
+}
+
+.result-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.result-rank {
+  min-width: 1.7rem;
+  text-align: right;
+  font-size: 0.75rem;
+  color: var(--parchment-dim);
+  font-variant-numeric: tabular-nums;
+}
+.result-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  flex: none;
+}
+.result-thumb.placeholder, .dock-thumb.placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--parchment-dim);
+  background: var(--felt);
+}
+.result-name {
+  flex: 1;
+  font-family: var(--serif);
+  line-height: 1.2;
+  font-size: 0.98rem;
+}
+.result-name .who {
+  font-family: var(--sans);
+  color: var(--parchment-dim);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.score-chip {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--tier-tint) 55%, var(--line));
+  background: color-mix(in srgb, var(--tier-tint) 22%, var(--felt));
+}
+
+/* ---- expanded detail ---- */
+.result-detail {
+  border-top: 1px solid var(--line);
+  padding: 0.7rem 0.8rem 0.8rem;
+  display: grid;
+  gap: 0.7rem;
+}
+.detail-art img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  display: block;
+}
+.detail-art.partners {
+  display: flex;
+  gap: 0.4rem;
+}
+.detail-art.partners img {
+  width: calc(50% - 0.2rem);
+  height: 110px;
+}
+.detail-stats {
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+}
+.detail-stats > div { display: flex; justify-content: space-between; gap: 1rem; }
+.detail-stats dt { color: var(--parchment-dim); }
+.detail-stats dd { margin: 0; font-variant-numeric: tabular-nums; }
+.detail-stats .diff.up { color: var(--p4); }
+.detail-stats .diff.down { color: var(--p1); }
+.detail-stats .diff.even { color: var(--parchment-dim); }
+.detail-stats .pending { color: var(--parchment-dim); font-style: italic; }
+
+.results-footer {
+  margin-top: 2rem;
+  text-align: center;
+  color: var(--parchment-dim);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
