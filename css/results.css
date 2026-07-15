@@ -14,9 +14,81 @@
 
 .loading-msg { color: var(--parchment-dim); text-align: center; margin-top: 4rem; }
 
-.results-header { text-align: center; margin: 0.8rem 0 1rem; }
+.results-header { text-align: center; margin: 0.8rem 0 0.7rem; }
 .results-header h1 { margin: 0 0 0.15rem; font-size: 1.7rem; }
 .results-sub { margin: 0; color: var(--parchment-dim); font-size: 0.85rem; }
+
+/* ---- filter chips ---- */
+.filter-bar { margin-bottom: 0.6rem; }
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+}
+.chip {
+  font-size: 0.78rem;
+  padding: 0.28rem 0.75rem;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--parchment-dim);
+  border: 1px solid var(--line);
+  opacity: 0.55;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+.chip.on {
+  opacity: 1;
+  color: var(--parchment);
+  background: var(--felt-raised);
+  border-color: color-mix(in srgb, var(--focus) 45%, var(--line));
+}
+.chip.reset {
+  opacity: 1;
+  color: var(--focus);
+  border-color: color-mix(in srgb, var(--focus) 55%, var(--line));
+}
+
+/* WUBRG chips: filled with the mana color when on, hollow when off. */
+.color-chip {
+  min-width: 2.1rem;
+  text-align: center;
+  font-weight: 700;
+  padding: 0.28rem 0.5rem;
+}
+.color-chip.on { color: #14161a; border-color: transparent; }
+.color-chip.mana-W.on { background: #f5f0dc; }
+.color-chip.mana-U.on { background: #7fb2d8; }
+.color-chip.mana-B.on { background: #a99bb0; }
+.color-chip.mana-R.on { background: #df9a83; }
+.color-chip.mana-G.on { background: #94c299; }
+.color-chip.mana-C.on { background: #c9c4bd; }
+
+/* Small identity pips (lightbox). */
+.mana-pips { display: inline-flex; gap: 2px; vertical-align: middle; }
+.mana-pip {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  display: inline-block;
+}
+.mana-pip.mana-W { background: #f5f0dc; }
+.mana-pip.mana-U { background: #4a90c4; }
+.mana-pip.mana-B { background: #47404d; }
+.mana-pip.mana-R { background: #c74a34; }
+.mana-pip.mana-G { background: #4e8f57; }
+.mana-pip.mana-C {
+  background: transparent;
+  border: none;
+  width: auto;
+  height: auto;
+  color: var(--parchment-dim);
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.empty-note { text-align: center; color: var(--parchment-dim); margin: 2.5rem 0; }
 
 /* ---- timeline (in-flow dock, sticky) ---- */
 .results-timeline {
@@ -35,6 +107,22 @@
   transition: height 160ms ease;
 }
 .results-timeline .dock-thumb { cursor: pointer; }
+.timeline-expand {
+  position: absolute;
+  top: 0.15rem;
+  right: 0;
+  z-index: 3;
+  font-size: 0.68rem;
+  padding: 0.15rem 0.55rem;
+  color: var(--parchment-dim);
+  background: transparent;
+  border-color: transparent;
+}
+.timeline-expand:hover { color: var(--parchment); }
+.results-timeline.expanded {
+  position: relative;    /* un-stick, but keep an anchor for the button */
+  backdrop-filter: none;
+}
 .dock-thumb.placeholder {
   display: inline-flex;
   align-items: center;
@@ -122,6 +210,23 @@
   font-size: 1.05rem;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.7));
 }
+
+/* Owner-vs-table badge: the conversation piece, promoted out of the lightbox. */
+.card-diff {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 0.64rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 0.1rem 0.32rem;
+  border-radius: 999px;
+  background: rgba(10, 12, 15, 0.78);
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  letter-spacing: 0.02em;
+}
+.card-diff.up { color: #e88a6a; }    /* owner high on their own deck — ember */
+.card-diff.down { color: #6fbf9a; }  /* owner humble — jade */
 
 .card-caption {
   position: absolute;
