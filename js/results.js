@@ -24,7 +24,7 @@
 // touch a ranking session. Sheets remain the source of truth.
 // ---------------------------------------------------------------------------
 
-import { RESULTS_SHEET_ID, RESULTS_TAB, TIERS } from "./config.js";
+import { RESULTS_SHEET_ID, RESULTS_TAB, RAW_TAB, TIERS } from "./config.js";
 import { fetchSheetTabRows, findColumn, loadAllDecks } from "./sheetsLoader.js";
 import { Catalog, deckId } from "./catalog.js";
 import { powerTint } from "./ui.js";
@@ -90,6 +90,29 @@ function parseFinalTab(rows) {
   return out;
 }
 
+/** Raw tab → Map(deckId → Map(rater → rating)) plus the rater list. Header:
+ *  DeckID, DeckName, Owner, Rater, Bracket, NumericRating. Tolerant of a
+ *  missing tab (returns empties — the lens row then offers Table/Owner only). */
+function parseRawTab(rows) {
+  const byDeck = new Map();
+  const raters = new Set();
+  if (!rows || rows.length < 2) return { byDeck, raters: [] };
+  const header = rows[0];
+  const cId = findColumn(header, "DeckID"), cRater = findColumn(header, "Rater"),
+    cRating = findColumn(header, "NumericRating");
+  if (cId === -1 || cRater === -1 || cRating === -1) return { byDeck, raters: [] };
+  for (const row of rows.slice(1)) {
+    const id = String(row[cId] ?? "").trim();
+    const rater = String(row[cRater] ?? "").trim();
+    const rating = num(row[cRating]);
+    if (!id || !rater || rating === null) continue;
+    raters.add(rater);
+    if (!byDeck.has(id)) byDeck.set(id, new Map());
+    byDeck.get(id).set(rater, rating);
+  }
+  return { byDeck, raters: [...raters].sort() };
+}
+
 /* ---- bracket helpers --------------------------------------------------------
    Band labels ALWAYS come from the fixed score intervals, never from the
    sheet's Bracket text: grouping is by interval, and a sheet label computed
@@ -121,6 +144,7 @@ const filters = {
 let allPlayers = [];
 
 function passesFilters(e) {
+  if (lensScore(e) === null) return false;
   if (!filters.players.has(e.owner)) return false;
   if (e.colors.length === 0) {
     return filters.include.has(COLOR_C) && !filters.exclude.has(COLOR_C);
@@ -132,6 +156,21 @@ function filtersPristine() {
   return filters.players.size === allPlayers.length
     && filters.include.size === WUBRG.length + 1
     && filters.exclude.size === 0;
+}
+
+/* ---- rater lens ----------------------------------------------------------------
+   A single-select that re-scores the whole page: "Table" is the group mean
+   from the final tab (default); "Owner" places every deck at its owner's own
+   rating; a rater's name shows the table exactly as they see it. Under a
+   lens, decks that person never rated (skips, or an owner who hasn't
+   submitted) are hidden like any other filtered deck. */
+let lens = "table";
+let allRaters = [];   // from the Raw tab; empty if that tab is unavailable
+
+function lensScore(e) {
+  if (lens === "table") return e.score;
+  if (lens === "owner") return e.ownerRating;
+  return e.ratings.get(lens) ?? null;
 }
 
 /* ---- art helpers -------------------------------------------------------------- */
@@ -200,11 +239,31 @@ function buildFilterBar() {
     },
   }, "Reset");
 
+  // Lens row: single-select. "Table" and "Owner" always exist; individual
+  // raters appear only if the Raw tab loaded.
+  const lensChip = (key, label) => registerChip(
+    el("button", {
+      class: "chip lens-chip",
+      onclick: () => {
+        if (lens === key) return;
+        lens = key;
+        regroupGallery();
+        applyFilters();
+      },
+    }, label),
+    () => lens === key);
+  const lensRow = el("div", { class: "chip-row" },
+    el("span", { class: "chip-row-label" }, "Ratings by"),
+    lensChip("table", "Table"),
+    lensChip("owner", "Owner"),
+    ...allRaters.map((r) => lensChip(r, r)));
+
   return el("nav", { class: "filter-bar" },
     el("div", { class: "chip-row" },
       el("span", { class: "chip-row-label" }, "Players"), ...playerChips, reset),
     colorRow("Include", filters.include, "inc"),
     colorRow("Exclude", filters.exclude, "exc"),
+    lensRow,
   );
 }
 function flip(set, key) { set.has(key) ? set.delete(key) : set.add(key); }
@@ -259,7 +318,8 @@ function buildTimeline(entries) {
    only; hidden thumbs get display:none, never removed. */
 function layoutTimeline() {
   if (!canvasEl) return;
-  const visible = timelineEntries.filter(passesFilters);
+  const visible = timelineEntries.filter(passesFilters)
+    .sort((a, b) => lensScore(a) - lensScore(b) || a.name.localeCompare(b.name));
   const hiddenIds = new Set(timelineEntries.map((e) => e.id));
   const W = canvasEl.clientWidth;
   if (!visible.length || !W) {
@@ -282,7 +342,7 @@ function layoutTimeline() {
     maxLane = 0;
     const laneRight = [];
     for (const e of visible) {
-      const x = ((e.score - 1) / 5) * (W - THUMB);
+      const x = ((lensScore(e) - 1) / 5) * (W - THUMB);
       let lane = 0;
       while (laneRight[lane] !== undefined && x - laneRight[lane] < gap) lane++;
       laneRight[lane] = x;
@@ -302,6 +362,7 @@ function layoutTimeline() {
   for (const { e, x, lane } of placed) {
     hiddenIds.delete(e.id);
     const thumb = thumbPool.get(e.id);
+    thumb.title = `${e.name} (${e.owner}) \u2014 ${lensScore(e).toFixed(2)}`;
     thumb.style.display = "";
     thumb.style.left = `${x}px`;
     thumb.style.bottom = `${lane * laneStep}px`;
@@ -331,33 +392,12 @@ const cardById = new Map();  // deckId → card element
 const bands = [];            // { el, cards: entry[] }
 
 function buildGallery(entries) {
-  const sorted = [...entries].sort(
-    (a, b) => b.score - a.score || a.name.localeCompare(b.name));
-
-  const wrap = el("section", { class: "results-gallery" });
-  const empty = el("p", { class: "empty-note hidden" }, "Nothing matches these filters.");
-  wrap.append(empty);
-
-  let grid = null, lastTier = null, bandRec = null;
-  for (const e of sorted) {
-    const tier = tierOf(e.score);
-    if (tier !== lastTier) {
-      lastTier = tier;
-      grid = el("div", { class: "tier-grid" });
-      const bandEl = el("section", {
-        class: "tier-band",
-        style: `--tier-tint:${tint((tier.low + tier.high) / 2)}`,
-      }, el("h2", { class: "tier-band-label" }, tier.label), grid);
-      bandRec = { el: bandEl, cards: [] };
-      bands.push(bandRec);
-      wrap.append(bandEl);
-    }
-    const card = deckCard(e, rankById.get(e.id));
-    cardById.set(e.id, card);
-    bandRec.cards.push(e);
-    grid.append(card);
-  }
-  return wrap;
+  galleryWrap = el("section", { class: "results-gallery" },
+    el("p", { class: "empty-note hidden" }, "Nothing matches these filters."));
+  // Create every card exactly once; regroupGallery() owns the grouping.
+  for (const e of entries) cardById.set(e.id, deckCard(e, rankById.get(e.id)));
+  regroupGallery();
+  return galleryWrap;
 }
 
 function deckCard(e, rank) {
@@ -404,6 +444,44 @@ function deckCard(e, rank) {
 
 function monogramPanel(e) {
   return el("div", { class: "card-art monogram" }, e.name.slice(0, 2).toUpperCase());
+}
+
+/* Re-score the gallery for the current lens: rebuild the band skeletons and
+   MOVE the existing card nodes into them (moving never reloads an image).
+   Cards missing a score under this lens are parked hidden in the last band
+   they occupied \u2014 applyFilters() hides them anyway. */
+let galleryWrap = null;
+
+function regroupGallery() {
+  if (!galleryWrap) return;
+  const scored = allEntries.filter((e) => lensScore(e) !== null)
+    .sort((a, b) => lensScore(b) - lensScore(a) || a.name.localeCompare(b.name));
+
+  bands.length = 0;
+  const emptyNote = galleryWrap.querySelector(".empty-note");
+  galleryWrap.replaceChildren(emptyNote);
+
+  let grid = null, lastTier = null, bandRec = null;
+  for (const e of scored) {
+    const s = lensScore(e);
+    const tier = tierOf(s);
+    if (tier !== lastTier) {
+      lastTier = tier;
+      grid = el("div", { class: "tier-grid" });
+      const bandEl = el("section", {
+        class: "tier-band",
+        style: `--tier-tint:${tint((tier.low + tier.high) / 2)}`,
+      }, el("h2", { class: "tier-band-label" }, tier.label), grid);
+      bandRec = { el: bandEl, cards: [] };
+      bands.push(bandRec);
+      galleryWrap.append(bandEl);
+    }
+    const card = cardById.get(e.id);
+    card.style.setProperty("--tier-tint", tint(s));
+    card.querySelector(".card-score").textContent = s.toFixed(2);
+    bandRec.cards.push(e);
+    grid.append(card); // append MOVES the node \u2014 no clone, no reload
+  }
 }
 
 /* ---- lightbox ---------------------------------------------------------------
@@ -453,7 +531,12 @@ document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeLig
  *  for the group's rating and (when submitted) a second pin for the owner's
  *  own — a drawn stat instead of a written one. */
 function miniAxis(e) {
-  const scores = [e.score, e.ownerRating].filter((v) => v !== null);
+  // Under a rater lens, that rater's rating joins the picture (unless they
+  // ARE the owner — one pin per person).
+  const lensRater = lens !== "table" && lens !== "owner" && lens !== e.owner
+    ? lens : null;
+  const lensRating = lensRater ? (e.ratings.get(lensRater) ?? null) : null;
+  const scores = [e.score, e.ownerRating, lensRating].filter((v) => v !== null);
   // Window: the deck's whole bracket, padded so pins never sit on the edge,
   // widened if the owner's rating strays outside it; clamped to 1–6.
   const t = tierOf(e.score);
@@ -496,6 +579,9 @@ function miniAxis(e) {
   } else {
     pins.append(el("div", { class: "mini-pending" }, `${e.owner}: pending`));
   }
+  if (lensRating !== null) {
+    pins.append(pinEl("lens", lensRating, `${lensRater} ${lensRating.toFixed(2)}`));
+  }
 
   const labels = el("div", { class: "mini-labels" },
     el("span", {}, `B${Math.round(lo)}`), el("span", {}, `B${Math.round(hi)}`));
@@ -534,14 +620,21 @@ async function boot() {
   try {
     // Scores and catalog load in parallel; a catalog failure only costs art
     // and links, never the rankings themselves.
-    const [finalRows, catalogResult] = await Promise.all([
+    const [finalRows, rawRows, catalogResult] = await Promise.all([
       fetchSheetTabRows(RESULTS_SHEET_ID, RESULTS_TAB),
+      fetchSheetTabRows(RESULTS_SHEET_ID, RAW_TAB).catch((err) => {
+        console.warn(`"${RAW_TAB}" tab unavailable \u2014 rater lens limited to Table/Owner.`, err);
+        return null;
+      }),
       loadAllDecks().catch((err) => {
         console.warn("Deck catalog unavailable \u2014 rendering without art.", err);
         return { decks: [] };
       }),
     ]);
     allEntries = parseFinalTab(finalRows);
+    const raw = parseRawTab(rawRows);
+    allRaters = raw.raters;
+    for (const e of allEntries) e.ratings = raw.byDeck.get(e.id) ?? new Map();
     const catalog = new Catalog(catalogResult.decks);
 
     // The join: aggregation sheet owns the numbers, data sheet owns the

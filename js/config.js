@@ -22,6 +22,9 @@ export const EXPORT_EMAIL = "jimnah.mtg@gmail.com";
  *  reads. Must also be shared "anyone with the link can view". */
 export const RESULTS_SHEET_ID = "1gINrEt9MZfjVVfTkp4ayvCFTEbtrTPf2-Pv88Psbpug";
 export const RESULTS_TAB = "final";
+/** Raw concatenated ratings (one row per deck×rater) — powers the per-rater
+ *  lens on results.html. Optional: if missing, the lens degrades gracefully. */
+export const RAW_TAB = "Raw";
 
 /** Worksheet tabs to ignore entirely. */
 export const IGNORED_TABS = ["Precons"];

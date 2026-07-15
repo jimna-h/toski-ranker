@@ -58,6 +58,11 @@
   color: var(--focus);
   border-color: color-mix(in srgb, var(--focus) 55%, var(--line));
 }
+.lens-chip.on {
+  background: color-mix(in srgb, #8fb4e3 22%, var(--felt-raised));
+  border-color: #8fb4e3;
+  color: var(--parchment);
+}
 
 /* WUBRG chips: filled with the mana color when on, hollow when off. */
 .color-chip {
@@ -378,6 +383,8 @@ body.lb-open { overflow: hidden; }
 }
 .mini-pin.group { background: var(--parchment); border-top-color: var(--parchment); }
 .mini-pin.owner { background: var(--focus); border-top-color: var(--focus); height: 22px; }
+.mini-pin.lens { background: #8fb4e3; border-top-color: #8fb4e3; height: 30px; }
+.mini-pin.lens .pin-label { color: #8fb4e3; bottom: 100%; }
 .pin-label {
   position: absolute;
   bottom: 100%;
