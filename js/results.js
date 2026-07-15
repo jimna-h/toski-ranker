@@ -732,9 +732,8 @@ function buildStats() {
         el("span", { class: "stat-value pending" }, "no ratings yet"));
     }
     const w = Math.min(Math.abs(bias) / CAP, 1) * 50;
-    const dir = Math.abs(bias) < 0.05 ? "in line with the table"
-      : bias > 0 ? `rates ${bias.toFixed(2)} higher than the table`
-      : `rates ${Math.abs(bias).toFixed(2)} lower than the table`;
+    const dir = Math.abs(bias) < 0.05 ? "±0.00 vs table"
+      : `${bias > 0 ? "+" : "−"}${Math.abs(bias).toFixed(2)} vs table`;
     return el("div", { class: "stat-row" },
       el("span", { class: "stat-name" }, rater),
       el("div", { class: "bias-track" },
@@ -744,7 +743,7 @@ function buildStats() {
           style: bias >= 0 ? `left:50%;width:${w}%` : `left:${50 - w}%;width:${w}%`,
         })),
       el("span", { class: "stat-value" },
-        `${dir} · typically ±${spread.toFixed(2)} off · ${n} ratings`));
+        `${dir} · ±${spread.toFixed(2)} typical · ${n} ratings`));
   });
 
   if (!ownerRows.length && !raterRows.length) return "";
@@ -756,11 +755,8 @@ function buildStats() {
     raterRows.length ? el("div", { class: "stat-panel" },
       el("h2", { class: "stat-title" }, "Rater report"),
       el("p", { class: "stat-sub" },
-        "How each player's ratings compare with everyone else's on the same " +
-        "decks. The bar shows their lean: right (ember) means they score decks " +
-        "higher than the rest of the table on average; left (jade) means lower. " +
-        "“Typically ±X off” is how far their rating usually lands " +
-        "from the others' average, in bracket points, in either direction."),
+        "Each player's lean vs the rest of the table — ember rates higher, " +
+        "jade lower. ± is their typical distance from the group."),
       ...raterRows) : "",
   );
 }
