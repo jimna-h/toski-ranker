@@ -62,7 +62,8 @@ function parseFinalTab(rows) {
   const col = (name) => findColumn(header, name);
   const cId = col("DeckID"), cName = col("DeckName"), cOwner = col("Owner"),
     cRating = col("NumericRating"), cOwnerRating = col("OwnerRating"),
-    cDiff = col("Difference"), cIdentity = col("Identity");
+    cDiff = col("Difference"), cIdentity = col("Identity"),
+    cStdev = col("StdDev");
   if (cName === -1 || cRating === -1) {
     throw new Error(`Tab "${RESULTS_TAB}" is missing a DeckName or NumericRating column.`);
   }
@@ -82,6 +83,7 @@ function parseFinalTab(rows) {
       score,
       ownerRating: num(cOwnerRating >= 0 ? row[cOwnerRating] : null),
       diff: num(cDiff >= 0 ? row[cDiff] : null),
+      stdevFinal: num(cStdev >= 0 ? row[cStdev] : null),
       // The catalog's Color_ID wins later; this is the fallback.
       identityRaw: cIdentity >= 0 ? String(row[cIdentity] ?? "").trim() : "",
     });
@@ -144,7 +146,7 @@ const filters = {
 let allPlayers = [];
 
 function passesFilters(e) {
-  if (lensScore(e) === null) return false;
+  if (dynScore(e) === null) return false;
   if (!filters.players.has(e.owner)) return false;
   if (e.colors.length === 0) {
     return filters.include.has(COLOR_C) && !filters.exclude.has(COLOR_C);
@@ -155,22 +157,54 @@ function passesFilters(e) {
 function filtersPristine() {
   return filters.players.size === allPlayers.length
     && filters.include.size === WUBRG.length + 1
-    && filters.exclude.size === 0;
+    && filters.exclude.size === 0
+    && ratersPristine();
 }
 
-/* ---- rater lens ----------------------------------------------------------------
-   A single-select that re-scores the whole page: "Table" is the group mean
-   from the final tab (default); "Owner" places every deck at its owner's own
-   rating; a rater's name shows the table exactly as they see it. Under a
-   lens, decks that person never rated (skips, or an owner who hasn't
-   submitted) are hidden like any other filtered deck. */
-let lens = "table";
-let allRaters = [];   // from the Raw tab; empty if that tab is unavailable
+/* ---- rater include filter --------------------------------------------------------
+   "Ratings by" is a multi-select over raters, all on by default — the
+   displayed score for every deck is the MEAN OF THE ENABLED RATERS' ratings,
+   recomputed live from the Raw tab. Everything on therefore IS the table
+   average, so there is no separate "Table" chip. The Owner chip gates
+   self-ratings: a rating by R on deck D counts iff R's chip is on AND
+   (R isn't D's owner, or the Owner chip is on). Turning Owner off shows
+   every deck at its mean-excluding-owner; turning off all but one rater
+   shows the table exactly as that person sees it.
+   The rater list is the union of raters seen in Raw and the deck owners, so
+   players who haven't submitted yet still get a chip (it just contributes
+   no ratings until they do). */
+let allRaters = [];
+const raters = { on: new Set(), ownerCounted: true };
 
-function lensScore(e) {
-  if (lens === "table") return e.score;
-  if (lens === "owner") return e.ownerRating;
-  return e.ratings.get(lens) ?? null;
+function ratersPristine() {
+  return raters.on.size === allRaters.length && raters.ownerCounted;
+}
+
+function countedRatings(e) {
+  const out = [];
+  for (const [r, v] of e.ratings) {
+    if (!raters.on.has(r)) continue;
+    if (r === e.owner && !raters.ownerCounted) continue;
+    out.push(v);
+  }
+  return out;
+}
+
+/** Mean of the enabled raters' ratings; null hides the deck. Falls back to
+ *  the final tab's precomputed mean if the Raw tab never loaded. */
+function dynScore(e) {
+  if (!e.ratings.size) return ratersPristine() ? e.score : null;
+  const vals = countedRatings(e);
+  if (!vals.length) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+/** Sample stdev over the same counted ratings (null below 2 samples). */
+function dynStdev(e) {
+  const vals = countedRatings(e);
+  if (vals.length < 2) return e.ratings.size ? null : e.stdevFinal;
+  const m = vals.reduce((a, b) => a + b, 0) / vals.length;
+  return Math.sqrt(vals.reduce((a, v) => a + (v - m) ** 2, 0) / (vals.length - 1));
 }
 
 /* ---- art helpers -------------------------------------------------------------- */
@@ -235,32 +269,40 @@ function buildFilterBar() {
       filters.include.clear();
       for (const c of [...WUBRG, COLOR_C]) filters.include.add(c);
       filters.exclude.clear();
+      raters.on.clear();
+      for (const r of allRaters) raters.on.add(r);
+      raters.ownerCounted = true;
+      regroupGallery();
       applyFilters();
     },
   }, "Reset");
 
-  // Lens row: single-select. "Table" and "Owner" always exist; individual
-  // raters appear only if the Raw tab loaded.
-  const lensChip = (key, label) => registerChip(
+  // "Ratings by" row: multi-select include over raters (all on = the table
+  // mean), plus the Owner gate on self-ratings. Any change re-scores the
+  // page, so regroup as well as re-filter.
+  const raterChange = () => { regroupGallery(); applyFilters(); };
+  const ownerChip = registerChip(
     el("button", {
       class: "chip lens-chip",
-      onclick: () => {
-        if (lens === key) return;
-        lens = key;
-        regroupGallery();
-        applyFilters();
-      },
-    }, label),
-    () => lens === key);
-  const lensRow = el("div", { class: "chip-row" },
-    el("span", { class: "chip-row-label" }, "Ratings by"),
-    lensChip("table", "Table"),
-    lensChip("owner", "Owner"),
-    ...allRaters.map((r) => lensChip(r, r)));
+      title: "Count owners' ratings of their own decks",
+      onclick: () => { raters.ownerCounted = !raters.ownerCounted; raterChange(); },
+    }, "Owner"),
+    () => raters.ownerCounted);
+  const raterChips = allRaters.map((r) => registerChip(
+    el("button", {
+      class: "chip lens-chip",
+      onclick: () => { flip(raters.on, r); raterChange(); },
+    }, r),
+    () => raters.on.has(r)));
+  const lensRow = allRaters.length
+    ? el("div", { class: "chip-row" },
+        el("span", { class: "chip-row-label" }, "Ratings by"),
+        ownerChip, ...raterChips)
+    : "";
 
   return el("nav", { class: "filter-bar" },
     el("div", { class: "chip-row" },
-      el("span", { class: "chip-row-label" }, "Players"), ...playerChips, reset),
+      el("span", { class: "chip-row-label" }, "Owners"), ...playerChips, reset),
     colorRow("Include", filters.include, "inc"),
     colorRow("Exclude", filters.exclude, "exc"),
     lensRow,
@@ -319,7 +361,7 @@ function buildTimeline(entries) {
 function layoutTimeline() {
   if (!canvasEl) return;
   const visible = timelineEntries.filter(passesFilters)
-    .sort((a, b) => lensScore(a) - lensScore(b) || a.name.localeCompare(b.name));
+    .sort((a, b) => dynScore(a) - dynScore(b) || a.name.localeCompare(b.name));
   const hiddenIds = new Set(timelineEntries.map((e) => e.id));
   const W = canvasEl.clientWidth;
   if (!visible.length || !W) {
@@ -342,7 +384,7 @@ function layoutTimeline() {
     maxLane = 0;
     const laneRight = [];
     for (const e of visible) {
-      const x = ((lensScore(e) - 1) / 5) * (W - THUMB);
+      const x = ((dynScore(e) - 1) / 5) * (W - THUMB);
       let lane = 0;
       while (laneRight[lane] !== undefined && x - laneRight[lane] < gap) lane++;
       laneRight[lane] = x;
@@ -362,7 +404,7 @@ function layoutTimeline() {
   for (const { e, x, lane } of placed) {
     hiddenIds.delete(e.id);
     const thumb = thumbPool.get(e.id);
-    thumb.title = `${e.name} (${e.owner}) \u2014 ${lensScore(e).toFixed(2)}`;
+    thumb.title = `${e.name} (${e.owner}) \u2014 ${dynScore(e).toFixed(2)}`;
     thumb.style.display = "";
     thumb.style.left = `${x}px`;
     thumb.style.bottom = `${lane * laneStep}px`;
@@ -424,6 +466,12 @@ function deckCard(e, rank) {
   // Top three across the whole table get a medal, because of course they do.
   if (rank <= 3) card.append(el("span", { class: "card-medal" }, ["🥇", "🥈", "🥉"][rank - 1]));
 
+  // 🔥 = one of the table's five most disputed decks (highest StdDev).
+  if (e.fire) card.append(el("span", {
+    class: `card-fire${rank <= 3 ? " beside-medal" : ""}`,
+    title: `The table disagrees: \u03c3 = ${e.stdevFinal.toFixed(2)}`,
+  }, "🔥"));
+
   // Owner-vs-table badge: ▲ the owner rates it higher than the group, ▼
   // lower. Only shown when the gap clears ~half a sub-tier (0.15) — small
   // disagreements are noise and would just clutter the art. The lightbox
@@ -454,8 +502,8 @@ let galleryWrap = null;
 
 function regroupGallery() {
   if (!galleryWrap) return;
-  const scored = allEntries.filter((e) => lensScore(e) !== null)
-    .sort((a, b) => lensScore(b) - lensScore(a) || a.name.localeCompare(b.name));
+  const scored = allEntries.filter((e) => dynScore(e) !== null)
+    .sort((a, b) => dynScore(b) - dynScore(a) || a.name.localeCompare(b.name));
 
   bands.length = 0;
   const emptyNote = galleryWrap.querySelector(".empty-note");
@@ -463,7 +511,7 @@ function regroupGallery() {
 
   let grid = null, lastTier = null, bandRec = null;
   for (const e of scored) {
-    const s = lensScore(e);
+    const s = dynScore(e);
     const tier = tierOf(s);
     if (tier !== lastTier) {
       lastTier = tier;
@@ -531,12 +579,13 @@ document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeLig
  *  for the group's rating and (when submitted) a second pin for the owner's
  *  own — a drawn stat instead of a written one. */
 function miniAxis(e) {
-  // Under a rater lens, that rater's rating joins the picture (unless they
-  // ARE the owner — one pin per person).
-  const lensRater = lens !== "table" && lens !== "owner" && lens !== e.owner
-    ? lens : null;
-  const lensRating = lensRater ? (e.ratings.get(lensRater) ?? null) : null;
-  const scores = [e.score, e.ownerRating, lensRating].filter((v) => v !== null);
+  const shown = dynScore(e) ?? e.score;       // what the page currently shows
+  const sd = dynStdev(e);                     // spread of the counted ratings
+  const custom = !ratersPristine();
+  const whiskerLo = sd !== null ? shown - sd : null;
+  const whiskerHi = sd !== null ? shown + sd : null;
+  const scores = [shown, e.ownerRating, whiskerLo, whiskerHi]
+    .filter((v) => v !== null);
   // Window: the deck's whole bracket, padded so pins never sit on the edge,
   // widened if the owner's rating strays outside it; clamped to 1–6.
   const t = tierOf(e.score);
@@ -572,23 +621,139 @@ function miniAxis(e) {
     else if (pct > 86) p.classList.add("edge-right");
     return p;
   };
+  // Disagreement whisker: a translucent band of \u00b11\u03c3 around the mean —
+  // wide band, the table argues about this deck; sliver, consensus.
+  if (sd !== null) {
+    axis.append(el("span", {
+      class: "mini-whisker",
+      style: `left:${pos(Math.max(lo, whiskerLo))}%;` +
+        `width:${pos(Math.min(hi, whiskerHi)) - pos(Math.max(lo, whiskerLo))}%`,
+    }));
+  }
+
   const pins = el("div", { class: "mini-pins" },
-    pinEl("group", e.score, `table ${e.score.toFixed(2)}`));
+    pinEl("group", shown, `${custom ? "avg" : "table"} ${shown.toFixed(2)}`));
   if (e.ownerRating !== null) {
     pins.append(pinEl("owner", e.ownerRating, `${e.owner} ${e.ownerRating.toFixed(2)}`));
   } else {
     pins.append(el("div", { class: "mini-pending" }, `${e.owner}: pending`));
   }
-  if (lensRating !== null) {
-    pins.append(pinEl("lens", lensRating, `${lensRater} ${lensRating.toFixed(2)}`));
-  }
 
+  const n = countedRatings(e).length || (e.ratings.size ? 0 : null);
   const labels = el("div", { class: "mini-labels" },
-    el("span", {}, `B${Math.round(lo)}`), el("span", {}, `B${Math.round(hi)}`));
+    el("span", {}, `B${Math.round(lo)}`),
+    el("span", { class: "mini-sigma" },
+      sd !== null ? `\u03c3 ${sd.toFixed(2)}${e.fire ? " \ud83d\udd25" : ""}` +
+        (n ? ` \u00b7 ${n} rating${n === 1 ? "" : "s"}` : "") : ""),
+    el("span", {}, `B${Math.round(hi)}`));
   return el("div", { class: "mini-axis-wrap" }, pins, axis, labels);
 }
 
 function hideOnError(ev) { ev.target.remove(); }
+
+/* ---- table stats -----------------------------------------------------------------
+   Two fixed panels below the gallery, computed once over the FULL table
+   (like medals and 🔥, they don't chase the filters):
+
+   • Collections — each owner's decks averaged into one number on the shared
+     power axis: whose pile runs hottest.
+   • Rater report — each rater vs the mean EXCLUDING their own vote (a mean
+     containing your vote flatters you). Two numbers per rater: bias (signed
+     — runs hot or cold) and spread (average absolute miss — how often they
+     simply disagree, regardless of direction). A rater can be calibrated
+     but scattered, or harsh but in lockstep; these are different virtues. */
+function ownerStats() {
+  const by = new Map();
+  for (const e of allEntries) {
+    if (!by.has(e.owner)) by.set(e.owner, []);
+    by.get(e.owner).push(e.score);
+  }
+  return [...by.entries()]
+    .map(([owner, scores]) => ({
+      owner,
+      n: scores.length,
+      avg: scores.reduce((a, b) => a + b, 0) / scores.length,
+    }))
+    .sort((a, b) => b.avg - a.avg);
+}
+
+function raterStats() {
+  const devs = new Map(); // rater → array of (rating − mean-of-others)
+  for (const e of allEntries) {
+    const entries = [...e.ratings.entries()];
+    if (entries.length < 2) continue; // no "others" to compare against
+    const sum = entries.reduce((a, [, v]) => a + v, 0);
+    for (const [rater, v] of entries) {
+      const others = (sum - v) / (entries.length - 1);
+      if (!devs.has(rater)) devs.set(rater, []);
+      devs.get(rater).push(v - others);
+    }
+  }
+  return [...devs.entries()]
+    .map(([rater, ds]) => ({
+      rater,
+      n: ds.length,
+      bias: ds.reduce((a, b) => a + b, 0) / ds.length,
+      spread: ds.reduce((a, b) => a + Math.abs(b), 0) / ds.length,
+    }))
+    .sort((a, b) => a.spread - b.spread); // most table-aligned first
+}
+
+/** Full-range (1–6) gradient, sampled from the same powerTint as everything
+ *  else so the stats axes can never drift from the dock's colors. */
+function fullAxisGradient() {
+  const stops = [0, 0.2, 0.4, 0.6, 0.8, 1]
+    .map((t) => `${powerTint(t)} ${t * 100}%`).join(", ");
+  return `linear-gradient(90deg, ${stops})`;
+}
+
+function buildStats() {
+  const owners = ownerStats();
+  const raters = raterStats();
+
+  const ownerRows = owners.map(({ owner, n, avg }) => {
+    const tier = tierOf(avg);
+    return el("div", { class: "stat-row" },
+      el("span", { class: "stat-name" }, owner),
+      el("div", { class: "stat-axis", style: `background:${fullAxisGradient()}` },
+        el("span", { class: "stat-pin", style: `left:${((avg - 1) / 5) * 100}%` })),
+      el("span", { class: "stat-value" },
+        `${avg.toFixed(2)} · ${tier.label} · ${n} deck${n === 1 ? "" : "s"}`));
+  });
+
+  // Bias renders as a diverging bar from a center zero line: ember right =
+  // rates above the table, jade left = below. Scale caps at ±0.6 so one
+  // outlier doesn't flatten everyone else's bars.
+  const CAP = 0.6;
+  const raterRows = raters.map(({ rater, n, bias, spread }) => {
+    const w = Math.min(Math.abs(bias) / CAP, 1) * 50;
+    return el("div", { class: "stat-row" },
+      el("span", { class: "stat-name" }, rater),
+      el("div", { class: "bias-track" },
+        el("span", { class: "bias-zero" }),
+        el("span", {
+          class: `bias-bar ${bias >= 0 ? "hot" : "cold"}`,
+          style: bias >= 0 ? `left:50%;width:${w}%` : `left:${50 - w}%;width:${w}%`,
+        })),
+      el("span", { class: "stat-value" },
+        `${bias >= 0 ? "+" : ""}${bias.toFixed(2)} bias · ±${spread.toFixed(2)} spread · ${n}`));
+  });
+
+  if (!ownerRows.length && !raterRows.length) return "";
+  return el("section", { class: "stats-section" },
+    ownerRows.length ? el("div", { class: "stat-panel" },
+      el("h2", { class: "stat-title" }, "Collections"),
+      el("p", { class: "stat-sub" }, "Average table rating of the decks each player owns."),
+      ...ownerRows) : "",
+    raterRows.length ? el("div", { class: "stat-panel" },
+      el("h2", { class: "stat-title" }, "Rater report"),
+      el("p", { class: "stat-sub" },
+        "Each rater vs the table without them. Bias: rates hot (▶) or cold (◀). " +
+        "Spread: average size of disagreement either way."),
+      ...raterRows) : "",
+  );
+}
+
 
 /* ---- filtering (in place — the no-flash core) --------------------------------- */
 let allEntries = [];
@@ -633,8 +798,11 @@ async function boot() {
     ]);
     allEntries = parseFinalTab(finalRows);
     const raw = parseRawTab(rawRows);
-    allRaters = raw.raters;
     for (const e of allEntries) e.ratings = raw.byDeck.get(e.id) ?? new Map();
+    // Union with owners so not-yet-submitted players still get a chip.
+    allRaters = [...new Set([...raw.raters, ...allEntries.map((e) => e.owner)])].sort();
+    if (!raw.raters.length) allRaters = []; // no Raw tab → hide the row entirely
+    for (const r of allRaters) raters.on.add(r);
     const catalog = new Catalog(catalogResult.decks);
 
     // The join: aggregation sheet owns the numbers, data sheet owns the
@@ -666,6 +834,12 @@ async function boot() {
         .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
         .map((e, i) => [e.id, i + 1]));
 
+    // 🔥 marks the table's most disputed decks: the five highest StdDevs,
+    // provided the disagreement is real (σ ≥ 0.3 — roughly a sub-tier).
+    const disputed = allEntries.filter((e) => (e.stdevFinal ?? 0) >= 0.3)
+      .sort((a, b) => b.stdevFinal - a.stdevFinal).slice(0, 5);
+    for (const e of disputed) e.fire = true;
+
     allPlayers = [...new Set(allEntries.map((e) => e.owner))].sort();
     filters.players = new Set(allPlayers);
 
@@ -676,6 +850,7 @@ async function boot() {
       buildFilterBar(),
       buildTimeline(allEntries),
       buildGallery(allEntries),
+      buildStats(),
       el("footer", { class: "results-footer" },
         "Scores are the group's mean rating on the fixed bracket scale (1\u20136). ",
         "Tap any deck: pins show the table's rating vs the owner's own."),
