@@ -6,7 +6,7 @@
 // action is simpler and plenty fast — no framework needed.
 // ---------------------------------------------------------------------------
 
-import { TIERS, tierById } from "./config.js";
+import { TIERS, tierById, ACTIVE_MODE, MODES } from "./config.js";
 import { computeScores } from "./scoring.js";
 
 /* ---- power-gradient tints -------------------------------------------------
@@ -30,9 +30,14 @@ export function powerTint(t) {
   const i = Math.min(Math.floor(scaled), ANCHORS.length - 2);
   return lerpColor(ANCHORS[i], ANCHORS[i + 1], scaled - i);
 }
-const TIER_TINT = Object.fromEntries(
-  TIERS.map((t, i) => [t.id, powerTint(i / (TIERS.length - 1))])
-);
+/** Tier → tint, computed against the ACTIVE mode's tier count so both the
+ *  11-step power scale and the 6-step dependency scale span the full
+ *  gradient. A function rather than a precomputed map because the active
+ *  mode can change between sessions. */
+function tierTint(tierId) {
+  const i = TIERS.findIndex((t) => t.id === tierId);
+  return powerTint(i / (TIERS.length - 1));
+}
 
 /* ---- tiny DOM helpers ---------------------------------------------------- */
 
@@ -199,6 +204,22 @@ export class UI {
       ...players.map((p) => el("option", { value: p }, p))
     );
 
+    // Mode: which scale this session ranks on. Each player can have one
+    // session PER mode, so switching modes here switches which session
+    // Resume points at rather than replacing anything.
+    let mode = "power";
+    const modeRow = el("div", { class: "scope-row mode-row" });
+    const paintModes = () => {
+      modeRow.replaceChildren(
+        ...Object.values(MODES).map((m) =>
+          el("button", {
+            class: `scope-btn${mode === m.id ? " active" : ""}`,
+            onclick: () => { mode = m.id; paintModes(); refresh(); },
+          }, m.name)
+        )
+      );
+    };
+
     // Scope: which decks this session rates. "All decks" is the default;
     // a resumed session keeps its saved scope (switching would prune work),
     // so the choice locks while a session exists — Start over unlocks it.
@@ -224,12 +245,13 @@ export class UI {
     /** Repaint scope / go / restart for the currently selected player. */
     const refresh = () => {
       const player = select.value;
-      const info = player ? sessionInfo(player) : null;
+      const info = player ? sessionInfo(player, mode) : null;
       go.disabled = !player;
       locked = !!info;
       if (info) scope = info.scope;
       paintScopes();
       go.textContent = info ? `Resume (${info.progress} placed)` : "Start ranking";
+      go.dataset.mode = mode;
 
       restartArea.replaceChildren();
       if (info) {
@@ -240,9 +262,9 @@ export class UI {
           restartArea.replaceChildren(
             el("div", { class: "notice" },
               el("strong", {}, `Erase ${player}'s progress?`),
-              el("p", {}, `This permanently deletes the ${info.progress} decks placed so far on this device. Are you sure?`),
+              el("p", {}, `This permanently deletes ${player}'s ${MODES[mode].name.toLowerCase()} progress (${info.progress} placed) on this device. Are you sure?`),
               el("div", { class: "actions" },
-                el("button", { onclick: () => { this.h.onResetSession(player); refresh(); } }, "Yes, start over"),
+                el("button", { onclick: () => { this.h.onResetSession(player, mode); refresh(); } }, "Yes, start over"),
                 el("button", { onclick: refresh }, "Cancel")
               )
             )
@@ -251,15 +273,17 @@ export class UI {
         restartArea.append(restartBtn);
       }
     };
+    paintModes();
     paintScopes();
     select.addEventListener("change", refresh);
-    go.addEventListener("click", () => this.h.onStart(select.value, scope));
+    go.addEventListener("click", () => this.h.onStart(select.value, scope, mode));
 
     this.root.append(
       el("div", { class: "start" },
         el("h1", {}, "Toski Ranker"),
         el("p", { class: "sub" }, "Every deck, one at a time. Pick a bracket, answer a couple of comparisons, done. Progress saves automatically — close the tab whenever."),
         select,
+        modeRow,
         scopeRow,
         go,
         restartArea
@@ -278,14 +302,17 @@ export class UI {
         "button",
         {
           class: "bracket-btn",
-          style: `--tint:${TIER_TINT[tier.id]}`,
+          style: `--tint:${tierTint(tier.id)}`,
+          title: tier.blurb ?? "",
           onclick: () => this.h.onBracket(tier.id),
         },
-        tier.label
+        tier.label,
+        tier.name ? el("span", { class: "bracket-sub" }, tier.name) : ""
       );
 
-    // Rows mirror the bracket structure: 1 / 3 / 3 / 3 / 1
-    const rows = [[0], [1, 2, 3], [4, 5, 6], [7, 8, 9], [10]];
+    // Row layout comes from the active mode (power: 1/3/3/3/1 mirroring the
+    // bracket structure; dependency: 2 rows of 3).
+    const rows = ACTIVE_MODE.rows;
     this.root.append(
       el("div", { class: "bracket-grid" },
         ...rows.map((idxs) =>
@@ -380,8 +407,8 @@ export class UI {
     for (const tier of TIERS) {
       const groups = s.buckets[tier.id];
       if (!groups?.length) continue;
-      const section = el("div", { class: "edit-tier", style: `--tint:${TIER_TINT[tier.id]}` },
-        el("h2", {}, tier.label)
+      const section = el("div", { class: "edit-tier", style: `--tint:${tierTint(tier.id)}` },
+        el("h2", {}, tier.name ? `${tier.label} — ${tier.name}` : tier.label)
       );
       // Strongest first within the tier — matches how players talk about lists.
       for (const group of [...groups].reverse()) {
@@ -448,21 +475,21 @@ export class UI {
 
     const canvas = el("div", { class: "dock-canvas" });
 
-    // Axis bar + boundary ticks. Majors at whole brackets, minors at the
-    // Low/Mid/High thirds — same 1..6 → 0..1 mapping as the thumbnails.
+    // Axis bar + boundary ticks, all driven by the active mode's axis
+    // config (power: majors at whole brackets, minors at the Low/Mid/High
+    // thirds over 1–6; dependency: majors at tier bounds over 1–7).
+    const { min, max, majorTicks, minorTicks, labels: axisLabels } = ACTIVE_MODE.axis;
     const axis = el("div", { class: "dock-axis" });
     const tickAt = (v, major) =>
       el("span", {
         class: `dock-tick${major ? " major" : ""}`,
-        style: `left:${((v - 1) / 5) * 100}%`,
+        style: `left:${((v - min) / (max - min)) * 100}%`,
       });
-    for (const v of [2, 3, 4, 5]) axis.append(tickAt(v, true));
-    for (const base of [2, 3, 4]) {
-      axis.append(tickAt(base + 1 / 3, false), tickAt(base + 2 / 3, false));
-    }
+    for (const v of majorTicks) axis.append(tickAt(v, true));
+    for (const v of minorTicks) axis.append(tickAt(v, false));
 
     const labels = el("div", { class: "dock-labels" },
-      ...["B1", "B2", "B3", "B4", "B5"].map((b) => el("span", {}, b))
+      ...axisLabels.map((b) => el("span", {}, b))
     );
 
     const dock = el("div", { class: "dock" },
@@ -528,7 +555,8 @@ export class UI {
       maxLane = 0;
       const laneRight = [];
       for (const e of this._dockEntries) {
-        const x = ((e.score - 1) / 5) * (W - THUMB);
+        const { min, max } = ACTIVE_MODE.axis;
+        const x = ((e.score - min) / (max - min)) * (W - THUMB);
         let lane = 0;
         while (laneRight[lane] !== undefined && x - laneRight[lane] < gap) lane++;
         laneRight[lane] = x;
@@ -587,8 +615,8 @@ export class UI {
     for (const tier of [...TIERS].reverse()) {
       const groups = s.buckets[tier.id];
       if (!groups?.length) continue;
-      const section = el("div", { class: "gallery-tier", style: `--tint:${TIER_TINT[tier.id]}` },
-        el("h2", {}, tier.label));
+      const section = el("div", { class: "gallery-tier", style: `--tint:${tierTint(tier.id)}` },
+        el("h2", {}, tier.name ? `${tier.label} — ${tier.name}` : tier.label));
       const rowEl = el("div", { class: "gallery-row" });
       // Groups strongest → weakest within the tier; a multi-deck group is a
       // tie and renders as one visually joined cluster.

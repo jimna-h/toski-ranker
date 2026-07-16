@@ -12,6 +12,7 @@ import {
   skipCurrent, acceptEdgeMove, rerankDeck, reconcileWithCatalog,
 } from "./ranking.js";
 import { downloadCsv, emailCsv, copyForSheet } from "./exportCsv.js";
+import { setMode } from "./config.js";
 import { UI } from "./ui.js";
 
 let catalog = null;
@@ -51,8 +52,11 @@ function scopedIds(player, scope) {
   return ids;
 }
 
-function onStart(player, scope) {
-  const existing = Session.load(player);
+function onStart(player, scope, mode = "power") {
+  // The engine and UI read tier config through live bindings; switch them
+  // to this session's scale before anything touches state.
+  setMode(mode);
+  const existing = Session.load(player, mode);
   if (existing) {
     // A saved session keeps its original scope — switching scope mid-run
     // would silently prune already-ranked decks, so we don't allow it.
@@ -70,7 +74,7 @@ function onStart(player, scope) {
     existing.commit();
     session = existing;
   } else {
-    session = Session.start(player, scopedIds(player, scope), scope);
+    session = Session.start(player, scopedIds(player, scope), scope, mode);
   }
   ui.session = session;
   proceed();
@@ -144,8 +148,8 @@ function onRerank(deckId) {
 
 /** "Start over" (confirmed in the UI): erase the saved session so the
  *  player can begin fresh, possibly with a different scope. */
-function onResetSession(player) {
-  Session.clear(player);
+function onResetSession(player, mode) {
+  Session.clear(player, mode);
 }
 
 function onExport() {
@@ -164,8 +168,8 @@ function onCopy() {
  *  Leaving mid-session is always safe: every action was already committed
  *  to localStorage, so Resume picks up exactly where the user left off. */
 function showStart() {
-  ui.renderStart(players, (player) => {
-    const existing = Session.load(player);
+  ui.renderStart(players, (player, mode) => {
+    const existing = Session.load(player, mode);
     return existing
       ? {
           progress: `${existing.placedCount()}/${existing.totalCount()}`,

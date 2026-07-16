@@ -38,10 +38,14 @@ function buildRows(state, catalog) {
 }
 
 export function buildCsv(state, catalog) {
-  const lines = ["DeckID,DeckName,Owner,Rater,Bracket,NumericRating"];
+  // Mode is appended LAST so positional formulas over the original columns
+  // (A=DeckID … F=NumericRating) in the aggregation sheet keep working;
+  // pre-modes power sessions export "power" like everything else.
+  const mode = state.mode ?? "power";
+  const lines = ["DeckID,DeckName,Owner,Rater,Bracket,NumericRating,Mode"];
   for (const r of buildRows(state, catalog)) {
     lines.push(
-      [r.deckId, csvField(r.name), csvField(r.owner), csvField(r.rater), r.bracket, r.rating].join(",")
+      [r.deckId, csvField(r.name), csvField(r.owner), csvField(r.rater), r.bracket, r.rating, mode].join(",")
     );
   }
   return lines.join("\r\n");
@@ -53,7 +57,8 @@ export function downloadCsv(state, catalog) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `edh-rankings-${state.player.replace(/\s+/g, "_")}.csv`;
+  const modeTag = (state.mode ?? "power") === "power" ? "" : `-${state.mode}`;
+  a.download = `edh-rankings${modeTag}-${state.player.replace(/\s+/g, "_")}.csv`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -69,7 +74,9 @@ export function downloadCsv(state, catalog) {
  *  never in the downloaded file, so pasted aggregates stay clean. */
 export function emailCsv(state, catalog) {
   downloadCsv(state, catalog); // the reliable copy
-  const subject = `EDH Rankings — ${state.player}`;
+  const subject = (state.mode ?? "power") === "power"
+    ? `EDH Rankings — ${state.player}`
+    : `EDH Rankings (${state.mode}) — ${state.player}`;
   const body =
     `Rankings from ${state.player}. Paste-ready CSV below.\n` +
     `IMPORTANT: the last line below should say "=== END OF DATA ===". ` +
@@ -91,9 +98,10 @@ export function emailCsv(state, catalog) {
  *  as proper columns. Returns the clipboard promise so the UI can show
  *  Copied!/failed feedback. */
 export function copyForSheet(state, catalog) {
-  const lines = ["DeckID\tDeckName\tOwner\tRater\tBracket\tNumericRating"];
+  const mode = state.mode ?? "power";
+  const lines = ["DeckID\tDeckName\tOwner\tRater\tBracket\tNumericRating\tMode"];
   for (const r of buildRows(state, catalog)) {
-    lines.push([r.deckId, r.name, r.owner, r.rater, r.bracket, r.rating].join("\t"));
+    lines.push([r.deckId, r.name, r.owner, r.rater, r.bracket, r.rating, mode].join("\t"));
   }
   return navigator.clipboard.writeText(lines.join("\n"));
 }

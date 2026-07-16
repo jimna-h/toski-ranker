@@ -15,10 +15,14 @@ import { SCHEMA_VERSION } from "./config.js";
 
 const KEY_PREFIX = "edhrank";
 
-/** localStorage key is scoped per player so a shared device can host
- *  several people's sessions side by side. */
-function storageKey(player) {
-  return `${KEY_PREFIX}:v${SCHEMA_VERSION}:${player}`;
+/** localStorage key is scoped per player AND per ranking mode, so a shared
+ *  device can host several people's sessions and each person can have a
+ *  power session and a dependency session side by side. The power mode
+ *  keeps the original un-suffixed key so sessions from before modes
+ *  existed resume untouched. */
+function storageKey(player, mode = "power") {
+  const base = `${KEY_PREFIX}:v${SCHEMA_VERSION}:${player}`;
+  return mode === "power" ? base : `${base}:${mode}`;
 }
 
 /** Fisher–Yates shuffle (in place). Randomized presentation order avoids
@@ -32,10 +36,12 @@ function shuffle(arr) {
   return arr;
 }
 
-export function freshState(player, deckIds, scope = "all") {
+export function freshState(player, deckIds, scope = "all", mode = "power") {
   return {
     version: SCHEMA_VERSION,
     player,
+    /** Which scale this session ranks on: "power" | "dependency". */
+    mode,
     /** Which decks this session rates: "all" | "mine" | "others".
      *  Fixed for the session's lifetime; reconciliation filters by it. */
     scope,
@@ -70,28 +76,29 @@ export class Session {
     this.undoStack = [];
   }
 
-  /** Load an existing session for a player, or null if none saved. */
-  static load(player) {
-    const raw = localStorage.getItem(storageKey(player));
+  /** Load an existing session for a player+mode, or null if none saved. */
+  static load(player, mode = "power") {
+    const raw = localStorage.getItem(storageKey(player, mode));
     if (!raw) return null;
     try {
       const state = JSON.parse(raw);
       if (state.version !== SCHEMA_VERSION) return null; // stale schema
+      if (!state.mode) state.mode = "power"; // pre-modes session
       return new Session(state);
     } catch {
       return null; // corrupted entry — treat as no session
     }
   }
 
-  static start(player, deckIds, scope = "all") {
-    const session = new Session(freshState(player, deckIds, scope));
+  static start(player, deckIds, scope = "all", mode = "power") {
+    const session = new Session(freshState(player, deckIds, scope, mode));
     session.commit();
     return session;
   }
 
   /** Permanently delete a player's saved session (used by "start over"). */
-  static clear(player) {
-    localStorage.removeItem(storageKey(player));
+  static clear(player, mode = "power") {
+    localStorage.removeItem(storageKey(player, mode));
   }
 
   /** Call before mutating state, so the action can be undone. */
@@ -102,7 +109,9 @@ export class Session {
 
   /** Persist after mutating state. */
   commit() {
-    localStorage.setItem(storageKey(this.state.player), JSON.stringify(this.state));
+    localStorage.setItem(
+      storageKey(this.state.player, this.state.mode ?? "power"),
+      JSON.stringify(this.state));
   }
 
   get canUndo() {

@@ -192,6 +192,16 @@ button:disabled { opacity: 0.4; cursor: default; }
   font-weight: 600;
   overflow: hidden;
 }
+/* Dependency-mode buttons carry the tier's name under the T-number. */
+.bracket-sub {
+  display: block;
+  font-weight: 400;
+  font-size: 0.68rem;
+  line-height: 1.15;
+  margin-top: 0.15rem;
+  color: var(--parchment-dim);
+}
+.mode-row { margin-bottom: 0.15rem; }
 .bracket-btn::before {
   /* gradient tint stripe — the power axis made visible */
   content: "";
