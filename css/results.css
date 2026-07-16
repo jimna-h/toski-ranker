@@ -519,6 +519,35 @@ body.lb-open { overflow: hidden; }
 .bias-bar.hot { background: #d97a58; }
 .bias-bar.cold { background: #58a07f; }
 
+/* ---- pod builder ---- */
+.pod-panel { margin-top: 1rem; }
+.pod-panel .chip-row { justify-content: flex-start; }
+.chip.pod-tier.on {
+  opacity: 1;
+  color: var(--parchment);
+  background: color-mix(in srgb, var(--tier-tint) 30%, var(--felt-raised));
+  border-color: var(--tier-tint);
+}
+.pod-deal {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.4rem 1.1rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--focus) 25%, var(--felt-raised));
+  border: 1px solid var(--focus);
+  color: var(--parchment);
+}
+.pod-grid {
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  margin-top: 0.4rem;
+}
+.pod-spread {
+  margin: 0.55rem 0 0;
+  font-size: 0.78rem;
+  color: var(--parchment-dim);
+  font-variant-numeric: tabular-nums;
+}
+
 .results-footer {
   margin-top: 1.6rem;
   text-align: center;
