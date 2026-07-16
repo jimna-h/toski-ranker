@@ -192,16 +192,53 @@ button:disabled { opacity: 0.4; cursor: default; }
   font-weight: 600;
   overflow: hidden;
 }
-/* Dependency-mode buttons carry the tier's name under the T-number. */
-.bracket-sub {
-  display: block;
-  font-weight: 400;
-  font-size: 0.68rem;
-  line-height: 1.15;
-  margin-top: 0.15rem;
+.mode-row { margin-bottom: 0.15rem; }
+
+/* ---- tier-info modal (the ⓘ button on the bracket screen) ---- */
+.info-btn { font-size: 0.85rem; }
+.info-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(8, 10, 13, 0.82);
+}
+.info-panel {
+  position: relative;
+  width: min(28rem, 100%);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--felt-raised);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 1.1rem 1.2rem 1.2rem;
+}
+.info-panel h2 { margin: 0 0 0.7rem; font-size: 1.2rem; }
+.info-close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border-radius: 50%;
+  line-height: 1;
+}
+.info-tier {
+  border-left: 4px solid var(--tint);
+  padding: 0.1rem 0 0.1rem 0.7rem;
+  margin-bottom: 0.85rem;
+}
+.info-tier h3 { margin: 0 0 0.2rem; font-size: 0.95rem; }
+.info-tier p {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
   color: var(--parchment-dim);
 }
-.mode-row { margin-bottom: 0.15rem; }
 .bracket-btn::before {
   /* gradient tint stripe — the power axis made visible */
   content: "";

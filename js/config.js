@@ -66,17 +66,17 @@ const POWER_TIERS = [
 ];
 
 const DEPENDENCY_TIERS = [
-  { id: "T1", label: "T1", name: "The Color Anchor", low: 1, high: 2,
+  { id: "T1", label: "Color Anchor", low: 1, high: 2,
     blurb: "The commander exists solely to set your colors. You rarely cast it; the deck is 99 cards that don't know it exists." },
-  { id: "T2", label: "T2", name: "The Flavor Mascot", low: 2, high: 3,
+  { id: "T2", label: "Flavor Mascot", low: 2, high: 3,
     blurb: "An on-theme card you cast when convenient. The deck's engine runs entirely in the 99; the commander is a welcome bonus, not a piece of the strategy." },
-  { id: "T3", label: "T3", name: "The Utility Roleplayer", low: 3, high: 4,
+  { id: "T3", label: "Utility Roleplayer", low: 3, high: 4,
     blurb: "A reliable tool used to smooth out your game. It provides generic value, card flow, or a mana sink when needed. It lubes the gears of your strategy but is never the focus of the deck." },
-  { id: "T4", label: "T4", name: "The Catalyst", low: 4, high: 5,
+  { id: "T4", label: "Catalyst", low: 4, high: 5,
     blurb: "The 99 operates fine on its own, but the commander acts as a massive multiplier. You cast it every game to supercharge your existing board state and turn fair plays into explosive ones." },
-  { id: "T5", label: "T5", name: "The Engine", low: 5, high: 6,
+  { id: "T5", label: "Engine", low: 5, high: 6,
     blurb: "The deck's resource loop is warped around the commander. The 99 is stuffed with potentially otherwise mediocre cards that are only run to aid the commander's plan. Without it to convert that filler into value, your game plan exists but is more likely to stall." },
-  { id: "T6", label: "T6", name: "The Cornerstone", low: 6, high: 7,
+  { id: "T6", label: "Cornerstone", low: 6, high: 7,
     blurb: "Absolute mechanical reliance. The commander is the only win condition or functional enabler, and the 99 has zero redundancy. If the commander is locked down or taxed out, you physically cannot win the game without a miracle from the Magic gods." },
 ];
 
@@ -99,7 +99,7 @@ export const MODES = {
     tiers: DEPENDENCY_TIERS,
     rows: [[0, 1, 2], [3, 4, 5]],
     axis: { min: 1, max: 7, majorTicks: [2, 3, 4, 5, 6], minorTicks: [],
-      labels: ["T1", "T2", "T3", "T4", "T5", "T6"] },
+      labels: ["Anchor", "Mascot", "Roleplayer", "Catalyst", "Engine", "Cornerstone"] },
     question: "How much of this deck's plan is written on its commander?",
   },
 };

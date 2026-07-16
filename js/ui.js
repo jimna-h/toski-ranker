@@ -292,6 +292,24 @@ export class UI {
   }
 
   /** Bracket-choice screen for the deck at the front of the queue. */
+  /** Modal listing every tier of the active mode with its full description.
+   *  Opened by the \u24d8 button on the bracket screen \u2014 explicit tap, never
+   *  hover, because tooltips are invisible on phones and ugly everywhere. */
+  showTierInfo() {
+    document.querySelector(".info-modal")?.remove();
+    const modal = el("div", { class: "info-modal",
+      onclick: (ev) => { if (ev.target === modal) modal.remove(); } },
+      el("div", { class: "info-panel" },
+        el("button", { class: "info-close", onclick: () => modal.remove() }, "\u2715"),
+        el("h2", {}, "The tiers"),
+        ...TIERS.filter((t) => t.blurb).map((t) =>
+          el("div", { class: "info-tier", style: `--tint:${tierTint(t.id)}` },
+            el("h3", {}, t.label),
+            el("p", {}, t.blurb))),
+      ));
+    document.body.append(modal);
+  }
+
   renderBracket(deckId) {
     this.clear();
     this.root.append(...this.topbar());
@@ -303,11 +321,9 @@ export class UI {
         {
           class: "bracket-btn",
           style: `--tint:${tierTint(tier.id)}`,
-          title: tier.blurb ?? "",
           onclick: () => this.h.onBracket(tier.id),
         },
-        tier.label,
-        tier.name ? el("span", { class: "bracket-sub" }, tier.name) : ""
+        tier.label
       );
 
     // Row layout comes from the active mode (power: 1/3/3/3/1 mirroring the
@@ -322,7 +338,11 @@ export class UI {
         )
       ),
       el("div", { class: "secondary-row" },
-        el("button", { onclick: () => this.h.onDefer() }, "Come back later")
+        el("button", { onclick: () => this.h.onDefer() }, "Come back later"),
+        TIERS.some((t) => t.blurb)
+          ? el("button", { class: "info-btn", onclick: () => this.showTierInfo() },
+              "\u24d8 What do these mean?")
+          : ""
       ),
       this.dock()
     );
@@ -408,7 +428,7 @@ export class UI {
       const groups = s.buckets[tier.id];
       if (!groups?.length) continue;
       const section = el("div", { class: "edit-tier", style: `--tint:${tierTint(tier.id)}` },
-        el("h2", {}, tier.name ? `${tier.label} — ${tier.name}` : tier.label)
+        el("h2", {}, tier.label)
       );
       // Strongest first within the tier — matches how players talk about lists.
       for (const group of [...groups].reverse()) {
@@ -616,7 +636,7 @@ export class UI {
       const groups = s.buckets[tier.id];
       if (!groups?.length) continue;
       const section = el("div", { class: "gallery-tier", style: `--tint:${tierTint(tier.id)}` },
-        el("h2", {}, tier.name ? `${tier.label} — ${tier.name}` : tier.label));
+        el("h2", {}, tier.label));
       const rowEl = el("div", { class: "gallery-row" });
       // Groups strongest → weakest within the tier; a multi-deck group is a
       // tie and renders as one visually joined cluster.
