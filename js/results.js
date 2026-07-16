@@ -762,6 +762,101 @@ function buildStats() {
 }
 
 
+/* ---- pod builder -------------------------------------------------------------------
+   Deal a "fair" pod: pick who's playing (1–5) and a target power bucket, and
+   each player gets one of their own decks from within ONE sub-tier of the
+   target. Fairness = tight score spread: many random legal combinations are
+   sampled and one of the tightest is dealt, with enough randomness left in
+   the tie-break that rerolling keeps producing fresh pods. Uses the table's
+   mean scores; ignores the page filters entirely. */
+const pod = { players: new Set(), tierIdx: null };
+
+function tierIndexOf(score) {
+  return TIERS.indexOf(tierOf(score));
+}
+
+function dealPod() {
+  const players = [...pod.players];
+  const pools = players.map((p) => allEntries.filter((e) =>
+    e.owner === p && Math.abs(tierIndexOf(e.score) - pod.tierIdx) <= 1));
+  const missing = players.filter((_, i) => !pools[i].length);
+  if (missing.length) return { missing };
+
+  // Sample legal combos, keep everything within 0.12 of the tightest spread,
+  // then pick one of those at random.
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  let best = [];
+  let bestSpread = Infinity;
+  for (let i = 0; i < 250; i++) {
+    const combo = pools.map(pick);
+    const scores = combo.map((e) => e.score);
+    const spread = Math.max(...scores) - Math.min(...scores);
+    if (spread < bestSpread - 0.12) { best = [combo]; bestSpread = spread; }
+    else if (spread <= bestSpread + 0.12) { best.push(combo); bestSpread = Math.min(bestSpread, spread); }
+  }
+  const deal = pick(best);
+  return { deal, spread: Math.max(...deal.map((e) => e.score)) - Math.min(...deal.map((e) => e.score)) };
+}
+
+function buildPodBuilder() {
+  const playerChips = allPlayers.map((p) => {
+    const c = el("button", { class: "chip", onclick: () => {
+      if (pod.players.has(p)) pod.players.delete(p);
+      else if (pod.players.size < 5) pod.players.add(p);
+      c.classList.toggle("on", pod.players.has(p));
+    }}, p);
+    return c;
+  });
+
+  const tierChips = TIERS.map((t, i) => {
+    const c = el("button", {
+      class: "chip pod-tier",
+      style: `--tier-tint:${tint((t.low + t.high) / 2)}`,
+      onclick: () => {
+        pod.tierIdx = pod.tierIdx === i ? null : i;
+        for (const [j, node] of tierChips.entries())
+          node.classList.toggle("on", pod.tierIdx === j);
+      },
+    }, t.label);
+    return c;
+  });
+
+  const out = el("div", { class: "pod-result" });
+  const dealBtn = el("button", { class: "pod-deal", onclick: () => {
+    out.replaceChildren();
+    if (!pod.players.size || pod.tierIdx === null) {
+      out.append(el("p", { class: "empty-note" }, "Pick at least one player and a bucket."));
+      return;
+    }
+    const r = dealPod();
+    if (r.missing) {
+      out.append(el("p", { class: "empty-note" },
+        `${r.missing.join(", ")} ${r.missing.length === 1 ? "has" : "have"} no deck within one sub-tier of ${TIERS[pod.tierIdx].label}.`));
+      return;
+    }
+    dealBtn.textContent = "Reroll";
+    const grid = el("div", { class: "tier-grid pod-grid" });
+    for (const e of [...r.deal].sort((a, b) => b.score - a.score)) {
+      const card = deckCard(e, rankById.get(e.id));
+      card.classList.remove("hidden");
+      grid.append(card);
+    }
+    out.append(grid, el("p", { class: "pod-spread" },
+      `Power spread: ${r.spread.toFixed(2)} \u2014 ${
+        r.spread < 0.34 ? "razor fair" : r.spread < 0.67 ? "fair enough" : "someone's the villain"}`));
+  }}, "Deal a pod");
+
+  return el("section", { class: "stat-panel pod-panel" },
+    el("h2", { class: "stat-title" }, "Pod builder"),
+    el("p", { class: "stat-sub" },
+      "Pick who's playing and a target bucket; everyone gets one of their own " +
+      "decks from within one sub-tier of it."),
+    el("div", { class: "chip-row" }, ...playerChips),
+    el("div", { class: "chip-row" }, ...tierChips),
+    el("div", { class: "chip-row" }, dealBtn),
+    out);
+}
+
 /* ---- filtering (in place — the no-flash core) --------------------------------- */
 let allEntries = [];
 let subEl = null;
@@ -858,6 +953,7 @@ async function boot() {
       buildTimeline(allEntries),
       buildGallery(allEntries),
       buildStats(),
+      buildPodBuilder(),
       el("footer", { class: "results-footer" },
         "Scores are the group's mean rating on the fixed bracket scale (1\u20136). ",
         "Tap any deck: pins show the table's rating vs the owner's own."),
